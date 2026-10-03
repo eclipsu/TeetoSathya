@@ -1,6 +1,7 @@
 import type { RoomSnapshot } from '@teeto/shared';
 import { Avatar } from '../../components/Avatar';
 import { formatClock } from '../../state/clock';
+import { FactCheckHistory } from './FactCheck';
 
 /** End-of-round summary: who spoke and how much of their talk time they used. */
 export function Summary({ snapshot: s }: { snapshot: RoomSnapshot }) {
@@ -42,6 +43,7 @@ export function Summary({ snapshot: s }: { snapshot: RoomSnapshot }) {
           );
         })}
       </div>
+      <FactCheckHistory items={s.game.factChecks} />
     </section>
   );
 }

@@ -1,4 +1,4 @@
-import type { BuzzView, Role, RoomSnapshot, TeamIndex } from './types';
+import type { BuzzView, ClaimOption, Role, RoomSnapshot, TeamIndex } from './types';
 
 export type ToastType = 'info' | 'success' | 'warn' | 'error';
 
@@ -66,11 +66,25 @@ export interface ClientToServerEvents {
   /** Spectators only. clientAt is for debugging; the server decides by arrival order. */
   'buzz:press': (p: { clientAt: number }, ack: Ack<{ result: 'won' | 'too_late' }>) => void;
   'buzz:dismiss': (p: HostPayload, ack: Ack) => void;
+
+  /**
+   * PCM16 mono 16 kHz from the LiveKit mic track. Accepted only while this socket
+   * is the server-authoritative hot-seat speaker. No ack (high frequency).
+   */
+  'transcript:audio': (chunk: Uint8Array) => void;
+  /** Latest claims of the current opposing speaker. Does not consume the fact-check. */
+  'factcheck:options': (ack: Ack<{ claims: ClaimOption[]; speakerId: string | null; speakerName: string | null }>) => void;
+  'factcheck:submit': (p: { claimId: string }, ack: Ack) => void;
+  'factcheck:dismiss': (p: HostPayload, ack: Ack) => void;
 }
 
 export interface ServerToClientEvents {
   'room:state': (s: RoomSnapshot) => void;
   'buzz:locked': (b: BuzzView) => void;
+  /** Interim (non-final) transcript for the current hot-seat speaker. Not stored. */
+  'transcript:interim': (p: { speakerId: string; text: string }) => void;
+  /** ElevenLabs session health. Debate rules keep running when this is false. */
+  'transcript:status': (p: { available: boolean }) => void;
   toast: (t: { type: ToastType; message: string }) => void;
   error: (e: AppError) => void;
   'room:closed': (p: { reason: string }) => void;

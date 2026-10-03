@@ -10,7 +10,9 @@ import { deleteVoiceRoom, syncMicPermissions } from './voice/livekit';
 import { livekitRouter } from './http/livekit.routes';
 import { RoomHub, type IO } from './socket/hub';
 import { installGameHandlers } from './socket/gameHandlers';
+import { installFactCheckHandlers } from './socket/factcheckHandlers';
 import { installGameTimers } from './engine/gameTimers';
+import { installTranscription } from './services/transcription';
 
 const store = new InMemoryRoomStore();
 
@@ -27,6 +29,8 @@ hub.onRoomChange((room) => void syncMicPermissions(room));
 hub.onVoiceJoined((room, participantId) => void syncMicPermissions(room, new Set([participantId])));
 installGameTimers(hub);
 installGameHandlers(hub);
+const transcription = installTranscription(hub);
+installFactCheckHandlers(hub, transcription);
 hub.start();
 
 app.use('/api', healthRouter);

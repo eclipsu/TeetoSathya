@@ -97,6 +97,14 @@ function unfreeze(room: Room, now: number): void {
   g.clockRunningSince = now;
 }
 
+/** Same clock freeze pause/buzz use. Fact-check holds the floor with this, without switching turns. */
+export function freezeClocks(room: Room, now: number): void {
+  freeze(room, now);
+}
+export function unfreezeClocks(room: Room, now: number): void {
+  unfreeze(room, now);
+}
+
 // ---------------------------------------------------------------- transitions
 
 export function startRound(room: Room, now: number): GameResult {
@@ -106,6 +114,12 @@ export function startRound(room: Room, now: number): GameResult {
   }
   for (const p of room.participants.values()) p.timeUsedMs = 0;
   const g = room.game;
+  g.roundSeq += 1;
+  g.factCheckUsed = new Set();
+  g.segments = [];
+  g.claims = [];
+  g.factChecks = [];
+  g.activeFactCheckId = null;
   g.activeSide = null;
   g.clockRunningSince = null;
   for (const side of [0, 1] as const) {
@@ -125,6 +139,7 @@ export function startRound(room: Room, now: number): GameResult {
 
 export function setHotSeat(room: Room, side: TeamIndex, sessionId: string, now: number): GameResult {
   if (room.status === 'ended') return fail('The round is over.');
+  if (room.game.activeFactCheckId) return fail('Dismiss the fact check first.');
   if (side !== 0 && side !== 1) return fail('Unknown side.');
   const p = room.participants.get(sessionId);
   if (!p || p.role !== 'speaker' || p.team !== side) return fail(`That player isn't a speaker for ${room.sides[side] ?? 'that side'}.`);
@@ -164,6 +179,7 @@ function switchTurn(room: Room, now: number): GameToast[] {
 export function turnDone(room: Room, sessionId: string, now: number): GameResult {
   const g = room.game;
   if (room.status !== 'live') return fail('The round is not live.');
+  if (g.activeFactCheckId) return fail('A fact check is in progress.');
   if (g.buzz) return fail('A buzz is in progress.');
   if (g.paused) return fail('The round is paused.');
   if (g.activeSide === null || g.hotSeat[g.activeSide] !== sessionId) return fail("It's not your turn.");
@@ -176,12 +192,14 @@ export function turnDone(room: Room, sessionId: string, now: number): GameResult
 
 export function hostSwitchTurn(room: Room, now: number): GameResult {
   if (room.status !== 'live') return fail('The round is not live.');
+  if (room.game.activeFactCheckId) return fail('Dismiss the fact check first.');
   if (room.game.buzz) return fail('Dismiss the buzz first.');
   return ok(...switchTurn(room, now));
 }
 
 export function rotateSpeaker(room: Room, side: TeamIndex, now: number): GameResult {
   if (room.status === 'ended') return fail('The round is over.');
+  if (room.game.activeFactCheckId) return fail('Dismiss the fact check first.');
   if (side !== 0 && side !== 1) return fail('Unknown side.');
   const cur = hotP(room, side);
   const next = nextSpeaker(room, side, cur?.sessionId ?? null);
@@ -200,6 +218,7 @@ export function pause(room: Room, now: number): GameResult {
 
 export function resume(room: Room, now: number): GameResult {
   if (room.status !== 'live') return fail('The round is not live.');
+  if (room.game.activeFactCheckId) return fail('Dismiss the fact check to resume.');
   if (room.game.buzz) return fail('Dismiss the buzz to resume.');
   if (!room.game.paused) return ok();
   unfreeze(room, now);
@@ -210,6 +229,17 @@ export function endRound(room: Room, now: number): GameResult {
   if (room.status !== 'live') return fail('The round is not live.');
   const g = room.game;
   settle(room, now);
+  const active = g.factChecks.find((f) => f.id === g.activeFactCheckId);
+  if (active && active.status === 'checking') {
+    active.status = 'resolved';
+    active.verdict = 'INCONCLUSIVE';
+    active.outcome = 'no_decision';
+    active.unavailable = true;
+    active.explanation = 'Fact check unavailable.';
+    active.confidence = null;
+    active.juryPhase = null;
+  }
+  g.activeFactCheckId = null;
   room.status = 'ended';
   g.roundRemainingMs = g.roundEndsAt !== null ? Math.max(0, g.roundEndsAt - now) : g.roundRemainingMs;
   g.roundEndsAt = null;
@@ -298,6 +328,7 @@ export function buzzBlockReason(room: Room, sessionId: string): string | null {
   if (!p) return 'Join the room first.';
   if (p.role !== 'spectator') return 'Only spectators can buzz in.';
   if (room.status !== 'live') return 'The round is not live.';
+  if (g.activeFactCheckId) return 'A fact check is in progress.';
   if (g.buzz) return 'Someone already buzzed.';
   if (g.paused) return 'The round is paused.';
   return null;

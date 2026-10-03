@@ -64,6 +64,77 @@ export interface BuzzView {
   challengedParticipantId: string | null;
 }
 
+export type FactVerdict = 'SUPPORTED' | 'CONTRADICTED' | 'INCONCLUSIVE' | 'CORRECT' | 'INCORRECT';
+/**
+ * Speaker claim contradicted or jury INCORRECT → successful challenge.
+ * Speaker claim supported or jury CORRECT → failed challenge.
+ * Anything else, including a jury that could not finish → no decision.
+ */
+export type FactCheckOutcome = 'successful' | 'failed' | 'no_decision';
+
+export type JuryModel = 'gemini' | 'claude' | 'chatgpt';
+export type JuryBinary = 'CORRECT' | 'INCORRECT';
+export type JuryPhase = 'independent' | 'deliberating';
+
+/** Seated jurors. Claude is off until `'claude'` is added back here. */
+export const JURY_SEATS: readonly JuryModel[] = ['gemini', 'chatgpt'];
+
+/** One juror's independent vote and their vote after seeing the other two. */
+export interface JuryVote {
+  model: JuryModel;
+  role: string;
+  initialVerdict: JuryBinary;
+  initialConfidence: number;
+  finalVerdict: JuryBinary;
+  finalConfidence: number;
+  changedVote: boolean;
+  reasoning: string;
+  limitations: string[];
+  responseToOthers: string;
+}
+
+/** Deterministic tally of the seated jurors' final votes. No model decides this. */
+export interface JuryResult {
+  claimId: string;
+  claim: string;
+  /** Null when the seated jurors tie. No vote is invented to break it. */
+  verdict: JuryBinary | null;
+  votesForCorrect: number;
+  votesForIncorrect: number;
+  /** Average confidence of the winning side. A 2–1 split multiplies that by 0.90. */
+  juryConfidence: number;
+  unanimous: boolean;
+  votes: JuryVote[];
+  completedAt: number;
+}
+
+/** One challengeable claim offered to the challenger. Not a fact-check result. */
+export interface ClaimOption {
+  id: string;
+  text: string;
+  createdAt: number;
+}
+
+/** Room-visible fact-check. `speakerId` / `challengerId` are public participant ids. */
+export interface FactCheckView {
+  id: string;
+  challengerId: string;
+  challengerName: string;
+  speakerId: string;
+  speakerName: string;
+  claim: string;
+  status: 'checking' | 'resolved';
+  verdict: FactVerdict | null;
+  outcome: FactCheckOutcome | null;
+  explanation: string | null;
+  /** True when the jury could not finish. Outcome is no decision; the attempt stays used. */
+  unavailable: boolean;
+  /** Set while the jury is running. Null once the check has a result. */
+  juryPhase: JuryPhase | null;
+  jury: JuryResult | null;
+  createdAt: number;
+}
+
 export interface GameView {
   /** Participant ids in the hot seat per team. */
   hotSeat: [string | null, string | null];
@@ -76,6 +147,12 @@ export interface GameView {
   roundRemainingMs: number | null;
   paused: boolean;
   buzz: BuzzView | null;
+  /** The fact-check currently holding the floor, if any. Cleared when the host resumes. */
+  factCheck: FactCheckView | null;
+  /** Resolved and in-progress checks for this round, oldest first. */
+  factChecks: FactCheckView[];
+  /** Public participant ids that have submitted their one fact-check this round. */
+  factCheckUsedIds: string[];
 }
 
 export interface RoomSnapshot {

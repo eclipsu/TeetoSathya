@@ -1,0 +1,110 @@
+.room__footer .factcheck-btn,
+.room__footer .factcheck-used { align-self: center; }
+.factcheck-btn {
+  background: linear-gradient(135deg, #f59e0b, #ef4444);
+  color: #fff;
+  border-color: transparent;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+}
+.factcheck-btn:hover:not(:disabled) { filter: brightness(1.08); }
+.factcheck-used {
+  opacity: 0.7;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+}
+
+.factcheck-banner {
+  position: fixed;
+  left: 50%;
+  bottom: 88px;
+  transform: translateX(-50%);
+  z-index: 30;
+  width: min(720px, calc(100vw - 32px));
+  max-height: min(72vh, 680px);
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 14px 18px;
+  border-radius: 16px;
+  background: rgba(17, 23, 41, 0.94);
+  border: 1px solid rgba(245, 158, 11, 0.7);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
+}
+.factcheck-banner__kicker { font-weight: 800; letter-spacing: 0.04em; }
+.factcheck-banner__claim { margin: 0; font-size: 1.05rem; }
+.factcheck-banner__verdict { font-family: var(--font-display); font-weight: 850; font-size: 1.35rem; margin: 0; }
+.factcheck-banner__verdict--supported { color: #86efac; }
+.factcheck-banner__verdict--contradicted { color: #fca5a5; }
+.factcheck-banner__verdict--inconclusive,
+.factcheck-banner__verdict--unavailable { color: #e5e7eb; }
+.factcheck-banner__footer { font-weight: 800; letter-spacing: 0.06em; font-size: 0.85rem; }
+.factcheck-banner__explain { margin: 0; color: var(--text-dim); }
+
+.factcheck-claims { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.factcheck-claim {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.03);
+  cursor: pointer;
+}
+.factcheck-claim:has(input:checked) { border-color: rgba(245, 158, 11, 0.8); }
+.factcheck-claim input { margin-top: 4px; }
+.factcheck-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
+
+.factcheck-history {
+  margin-top: 4px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: var(--glass);
+  border: 1px solid var(--border);
+  max-height: 180px;
+  overflow: auto;
+}
+.factcheck-history h3 { margin: 0 0 8px; font-size: 0.78rem; letter-spacing: 0.08em; color: var(--text-dim); }
+.factcheck-history ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.factcheck-history li { display: grid; grid-template-columns: auto 1fr; gap: 8px; align-items: start; }
+.factcheck-history p { margin: 0; }
+.factcheck-history .mark { font-weight: 800; }
+.factcheck-history .mark--ok { color: #86efac; }
+.factcheck-history .mark--bad { color: #fca5a5; }
+.factcheck-history .mark--mid { color: var(--text-dim); }
+.factcheck-quote { color: var(--text-dim); font-size: 0.88rem; }
+
+.jury-working, .jury-votes, .jury-split { list-style: none; margin: 0; padding: 0; }
+.jury-working { display: flex; flex-direction: column; gap: 4px; }
+.jury-phase { margin: 0; font-weight: 800; letter-spacing: 0.06em; }
+.jury-votes { display: flex; flex-direction: column; gap: 10px; }
+.jury-votes li {
+  padding-top: 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+.jury-votes__who { display: flex; justify-content: space-between; gap: 8px; font-size: 0.85rem; }
+.jury-votes__who span { color: var(--text-dim); }
+.jury-final { display: flex; flex-direction: column; gap: 4px; margin-top: 8px; }
+.jury-tally { margin: 0; font-family: var(--font-display); font-size: 1.6rem; font-weight: 850; }
+.jury-split { display: flex; flex-direction: column; gap: 2px; font-size: 0.9rem; }
+.jury-details { margin-top: 6px; }
+.jury-details summary { cursor: pointer; font-weight: 700; }
+.jury-details__card {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  font-size: 0.88rem;
+}
+.jury-details__card p { margin: 0 0 4px; }
+.jury-details__card ul { margin: 0; padding-left: 1.1rem; color: var(--text-dim); }
+
+.transcript-live {
+  margin: 0;
+  text-align: center;
+  font-style: italic;
+  color: var(--text-dim);
+  min-height: 1.2em;
+}
+.transcript-off { margin: 0; text-align: center; font-size: 0.78rem; color: #fde68a; }

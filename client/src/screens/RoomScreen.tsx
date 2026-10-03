@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import type { TeamIndex } from '@teeto/shared';
+import type { ClaimOption, TeamIndex } from '@teeto/shared';
 import { Avatar } from '../components/Avatar';
 import { ConnectionChip } from '../components/ConnectionChip';
 import { useToast } from '../components/Toasts';
@@ -9,7 +9,8 @@ import { copyText } from '../lib/clipboard';
 import { navigate } from '../lib/router';
 import { forgetHostToken, getHostToken, getSession } from '../lib/session';
 import { useRoom } from '../state/useRoom';
-import { VoiceProvider } from '../voice/VoiceProvider';
+import { VoiceProvider, useVoice } from '../voice/VoiceProvider';
+import { DebateCapture } from '../voice/debateCapture';
 import { VoiceDock } from '../voice/VoiceDock';
 import { micClosedReason, spaceAction } from '../state/rules';
 import { useSpaceKey } from '../state/useSpaceKey';
@@ -24,6 +25,7 @@ import { TeamColumn } from './room/TeamColumn';
 import { HostControlBar } from './room/HostControlBar';
 import { Stage } from './room/Stage';
 import { Summary } from './room/Summary';
+import { FactCheckBanner, FactCheckButton, FactCheckPicker } from './room/FactCheck';
 import './room/room.css';
 import './room/stage.css';
 
@@ -33,6 +35,10 @@ export function RoomScreen({ roomId }: { roomId: string }) {
   const { status, snapshot, me, myId, isHost } = room;
   const [pickerOpen, setPickerOpen] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [factPicker, setFactPicker] = useState<{ open: boolean; loading: boolean; claims: ClaimOption[]; speakerName: string | null; error: string | null; busy: boolean }>({
+    open: false, loading: false, claims: [], speakerName: null, error: null, busy: false,
+  });
+  const factGen = useRef(0);
   const [shaking, setShaking] = useState(false);
   const action = snapshot ? spaceAction(snapshot, myId) : null;
   const actionRef = useRef(action);
@@ -56,7 +62,7 @@ export function RoomScreen({ roomId }: { roomId: string }) {
   }, [room.buzzEvent]);
 
   // Chime when the floor passes to me.
-  const holdsFloor = !!snapshot && snapshot.status === 'live' && !snapshot.game.paused && !snapshot.game.buzz &&
+  const holdsFloor = !!snapshot && snapshot.status === 'live' && !snapshot.game.paused && !snapshot.game.buzz && !snapshot.game.factCheck &&
     snapshot.game.activeSide !== null && snapshot.game.hotSeat[snapshot.game.activeSide] === myId;
   const prevHolds = useRef(holdsFloor);
   useEffect(() => {
@@ -112,6 +118,37 @@ export function RoomScreen({ roomId }: { roomId: string }) {
     if (!res.ok) toast('warn', res.message);
   }
 
+  async function openFactCheck() {
+    const gen = ++factGen.current;
+    setFactPicker({ open: true, loading: true, claims: [], speakerName: null, error: null, busy: false });
+    const res = await room.call('factcheck:options', undefined, 18_000);
+    if (factGen.current !== gen) return;
+    if (!res.ok) {
+      setFactPicker((p) => ({ ...p, loading: false, error: res.message }));
+      return;
+    }
+    const claims = Array.isArray(res.claims) ? res.claims as ClaimOption[] : [];
+    const speakerName = typeof res.speakerName === 'string' ? res.speakerName : null;
+    setFactPicker((p) => ({ ...p, loading: false, claims, speakerName, error: null }));
+  }
+
+  async function submitFactCheck(claimId: string) {
+    setFactPicker((p) => ({ ...p, busy: true, error: null }));
+    const res = await room.call('factcheck:submit', { claimId }, 8_000);
+    if (!res.ok) {
+      setFactPicker((p) => ({ ...p, busy: false, error: res.message }));
+      toast('error', res.message);
+      return;
+    }
+    factGen.current += 1;
+    setFactPicker({ open: false, loading: false, claims: [], speakerName: null, error: null, busy: false });
+  }
+
+  function closeFactPicker() {
+    factGen.current += 1;
+    setFactPicker((p) => ({ ...p, open: false, busy: false }));
+  }
+
   async function pick(role: 'speaker' | 'spectator', team: TeamIndex | null) {
     setBusy(true);
     const res = await room.call('role:set', { role, team });
@@ -138,6 +175,7 @@ export function RoomScreen({ roomId }: { roomId: string }) {
 
   return (
     <VoiceProvider roomId={roomId} onConnected={() => void room.call('voice:joined')}>
+      <FloorCapture socket={room.socket} enabled={holdsFloor} />
       <div className="room" data-status={snapshot.status} data-host={isHost}>
         <header className="room__header">
           <div className="room__header-left">
@@ -184,7 +222,14 @@ export function RoomScreen({ roomId }: { roomId: string }) {
         ) : (
           <main className={`room__main ${shaking ? 'is-shaking' : ''}`}>
             <TeamColumn team={0} snapshot={snapshot} myId={myId} canTakeSeat={canTakeSeat} onTakeSeat={(t) => pick('speaker', t)} onHotSeat={hotSeatAction} />
-            <Stage snapshot={snapshot} myId={myId} isHost={isHost} onDone={done} />
+            <Stage
+              snapshot={snapshot}
+              myId={myId}
+              isHost={isHost}
+              onDone={done}
+              interimText={room.interim && snapshot.game.activeSide !== null && snapshot.game.hotSeat[snapshot.game.activeSide] === room.interim.speakerId ? room.interim.text : null}
+              transcriptionAvailable={room.transcriptionAvailable}
+            />
             <TeamColumn team={1} snapshot={snapshot} myId={myId} canTakeSeat={canTakeSeat} onTakeSeat={(t) => pick('speaker', t)} onHotSeat={hotSeatAction} />
           </main>
         )}
@@ -192,11 +237,26 @@ export function RoomScreen({ roomId }: { roomId: string }) {
         <SpectatorStrip snapshot={snapshot} myId={myId} />
 
         <div className="room__footer">
+          {snapshot.status === 'live' && (
+            <FactCheckButton snapshot={snapshot} myId={myId} onOpen={() => void openFactCheck()} />
+          )}
           {snapshot.status !== 'ended' && action && (
             <KeyHintBar action={action} isSpectator={me?.role === 'spectator'} onPress={press} />
           )}
           {isHost && <HostControlBar snapshot={snapshot} hostCall={hostCall} onDelete={deleteRoom} />}
         </div>
+
+        <FactCheckBanner factCheck={snapshot.game.factCheck} />
+        <FactCheckPicker
+          open={factPicker.open}
+          speakerName={factPicker.speakerName}
+          loading={factPicker.loading}
+          claims={factPicker.claims}
+          error={factPicker.error}
+          busy={factPicker.busy}
+          onCancel={closeFactPicker}
+          onSubmit={(id) => void submitFactCheck(id)}
+        />
 
         <BuzzOverlay
           event={room.buzzEvent}
@@ -222,6 +282,11 @@ export function RoomScreen({ roomId }: { roomId: string }) {
       </div>
     </VoiceProvider>
   );
+}
+
+function FloorCapture({ socket, enabled }: { socket: ReturnType<typeof useRoom>['socket']; enabled: boolean }) {
+  const voice = useVoice();
+  return <DebateCapture socket={socket} track={voice.localMicTrack} enabled={enabled && voice.micLive} />;
 }
 
 function NameConflict({ message, suggestions, onPick }: { message: string; suggestions: string[]; onPick: (n: string) => void }) {

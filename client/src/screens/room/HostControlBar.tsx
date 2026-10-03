@@ -55,7 +55,11 @@ export function HostControlBar({ snapshot: s, hostCall, onDelete }: Props) {
 
       {s.status === 'live' && (
         <>
-          {g.buzz ? (
+          {g.factCheck ? (
+            <button className="btn btn--sm btn--buzz" disabled={busy || g.factCheck.status === 'checking'} onClick={() => run('factcheck:dismiss')} title={g.factCheck.status === 'checking' ? 'Waiting for the jury' : 'Dismiss / Resume'}>
+              <BellIcon width={16} height={16} /> <span className="btn__label">Dismiss / Resume</span>
+            </button>
+          ) : g.buzz ? (
             <button className="btn btn--sm btn--buzz" disabled={busy} onClick={() => run('buzz:dismiss')} title="Dismiss / Resume">
               <BellIcon width={16} height={16} /> <span className="btn__label">Dismiss / Resume</span>
             </button>
@@ -68,11 +72,11 @@ export function HostControlBar({ snapshot: s, hostCall, onDelete }: Props) {
               <PauseIcon width={16} height={16} /> <span className="btn__label">Pause</span>
             </button>
           )}
-          <button className="btn btn--sm" disabled={busy || !!g.buzz} onClick={() => run('host:nextTurn')} title="Switch turn">
+          <button className="btn btn--sm" disabled={busy || !!g.buzz || !!g.factCheck} onClick={() => run('host:nextTurn')} title="Switch turn">
             <SwitchIcon width={16} height={16} /> <span className="btn__label">Switch turn</span>
           </button>
           {([0, 1] as const).map((side) => (
-            <button key={side} className={`btn btn--sm host-bar__rotate host-bar__rotate--${side}`} disabled={busy} onClick={() => run('host:rotateSpeaker', { side })} title={`Swap ${s.sides[side]}'s hot-seat speaker for the next teammate`}>
+            <button key={side} className={`btn btn--sm host-bar__rotate host-bar__rotate--${side}`} disabled={busy || !!g.factCheck} onClick={() => run('host:rotateSpeaker', { side })} title={`Swap ${s.sides[side]}'s hot-seat speaker for the next teammate`}>
               <RotateIcon width={16} height={16} /> <span className="btn__label">Rotate {s.sides[side]}</span>
             </button>
           ))}

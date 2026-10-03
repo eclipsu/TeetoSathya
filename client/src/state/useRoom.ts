@@ -19,11 +19,15 @@ export interface RoomConn {
   closedReason: string | null;
   socket: RoomSocket | null;
   /** Emit with ack; resolves with the server's answer (or a timeout error). */
-  call: (event: keyof ClientToServerEvents, payload?: unknown) => Promise<AckResult>;
+  call: (event: keyof ClientToServerEvents, payload?: unknown, timeoutMs?: number) => Promise<AckResult>;
   retryWithName: (name: string) => void;
   leave: () => Promise<void>;
   /** Latest buzz:locked event (n increments per buzz) for the dramatic overlay. */
   buzzEvent: { buzz: BuzzView; n: number } | null;
+  /** Interim transcript for the active speaker. Empty text means clear. */
+  interim: { speakerId: string; text: string } | null;
+  /** null until the server reports ElevenLabs health. */
+  transcriptionAvailable: boolean | null;
 }
 
 const ACK_TIMEOUT = 5000;
@@ -38,6 +42,8 @@ export function useRoom(roomId: string): RoomConn {
   const [closedReason, setClosedReason] = useState<string | null>(null);
   const [nameAttempt, setNameAttempt] = useState(0);
   const [buzzEvent, setBuzzEvent] = useState<{ buzz: BuzzView; n: number } | null>(null);
+  const [interim, setInterim] = useState<{ speakerId: string; text: string } | null>(null);
+  const [transcriptionAvailable, setTranscriptionAvailable] = useState<boolean | null>(null);
   const socketRef = useRef<RoomSocket | null>(null);
   const [socket, setSocket] = useState<RoomSocket | null>(null);
 
@@ -80,6 +86,8 @@ export function useRoom(roomId: string): RoomConn {
     });
     s.on('toast', (t) => toast(t.type, t.message));
     s.on('buzz:locked', (buzz) => setBuzzEvent((prev) => ({ buzz, n: (prev?.n ?? 0) + 1 })));
+    s.on('transcript:interim', (p) => setInterim(p.text ? p : null));
+    s.on('transcript:status', (p) => setTranscriptionAvailable(p.available));
     s.on('error', (e) => {
       if (e.code === 'session_replaced') {
         setStatus('replaced');
@@ -100,12 +108,12 @@ export function useRoom(roomId: string): RoomConn {
     };
   }, [roomId, nameAttempt, toast]);
 
-  const call = useCallback((event: keyof ClientToServerEvents, payload?: unknown) => {
+  const call = useCallback((event: keyof ClientToServerEvents, payload?: unknown, timeoutMs = ACK_TIMEOUT) => {
     const s = socketRef.current;
     if (!s?.connected) return Promise.resolve<AckResult>({ ok: false, code: 'bad_request', message: 'Not connected.' });
     return new Promise<AckResult>((resolve) => {
       const args: unknown[] = payload === undefined ? [] : [payload];
-      (s.timeout(ACK_TIMEOUT).emit as (...a: unknown[]) => void)(event, ...args, (err: Error | null, res: AckResult) => {
+      (s.timeout(timeoutMs).emit as (...a: unknown[]) => void)(event, ...args, (err: Error | null, res: AckResult) => {
         resolve(err ? { ok: false, code: 'bad_request', message: 'The server did not answer in time.' } : res);
       });
     });
@@ -125,5 +133,5 @@ export function useRoom(roomId: string): RoomConn {
 
   const me = useMemo(() => snapshot?.participants.find((p) => p.id === myId) ?? null, [snapshot, myId]);
 
-  return { status, snapshot, me, myId, isHost, error, closedReason, socket, call, retryWithName, leave, buzzEvent };
+  return { status, snapshot, me, myId, isHost, error, closedReason, socket, call, retryWithName, leave, buzzEvent, interim, transcriptionAvailable };
 }

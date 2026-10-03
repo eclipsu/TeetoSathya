@@ -1,4 +1,4 @@
-import type { Role, RoomSettings, RoomStatus, TeamIndex } from '@teeto/shared';
+import type { FactCheckOutcome, FactVerdict, JuryPhase, JuryResult, Role, RoomSettings, RoomStatus, TeamIndex } from '@teeto/shared';
 
 export interface Participant {
   /** Public per-room id: broadcast in snapshots and used as the LiveKit identity. */
@@ -28,6 +28,54 @@ export interface Buzz {
   challengedSessionId: string | null;
 }
 
+/** Finalized speech from one hot-seat speaker. Not lobby chat, not interim text. */
+export interface TranscriptSegment {
+  id: string;
+  roomId: string;
+  /** Private session id of the participant who held the floor. Never broadcast. */
+  speakerSessionId: string;
+  team: TeamIndex;
+  text: string;
+  at: number;
+  roundSeq: number;
+}
+
+/** Factual claim extracted from one speaker's finalized transcript. May be true or false. */
+export interface ExtractedClaim {
+  id: string;
+  roomId: string;
+  speakerSessionId: string;
+  team: TeamIndex;
+  text: string;
+  originalText: string;
+  createdAt: number;
+  roundSeq: number;
+}
+
+export interface FactCheckChallenge {
+  id: string;
+  roundSeq: number;
+  challengerSessionId: string;
+  challengerId: string;
+  challengerName: string;
+  challengerTeam: TeamIndex;
+  speakerSessionId: string;
+  speakerId: string;
+  speakerName: string;
+  speakerTeam: TeamIndex;
+  claimId: string;
+  claim: string;
+  status: 'checking' | 'resolved';
+  verdict: FactVerdict | null;
+  confidence: number | null;
+  explanation: string | null;
+  unavailable: boolean;
+  outcome: FactCheckOutcome | null;
+  juryPhase: JuryPhase | null;
+  jury: JuryResult | null;
+  createdAt: number;
+}
+
 export interface GameState {
   hotSeat: [string | null, string | null];
   activeSide: TeamIndex | null;
@@ -39,6 +87,15 @@ export interface GameState {
   roundRemainingMs: number | null;
   paused: boolean;
   buzz: Buzz | null;
+  /** Increments each time a round starts. Claims and checks from older rounds are ignored. */
+  roundSeq: number;
+  /** Session ids that have submitted their one fact-check this round. */
+  factCheckUsed: Set<string>;
+  segments: TranscriptSegment[];
+  claims: ExtractedClaim[];
+  factChecks: FactCheckChallenge[];
+  /** Id of the check currently holding the clocks, or null. */
+  activeFactCheckId: string | null;
 }
 
 export interface Room {
@@ -67,5 +124,11 @@ export function initialGameState(turnSeconds: number): GameState {
     roundRemainingMs: null,
     paused: false,
     buzz: null,
+    roundSeq: 0,
+    factCheckUsed: new Set(),
+    segments: [],
+    claims: [],
+    factChecks: [],
+    activeFactCheckId: null,
   };
 }
