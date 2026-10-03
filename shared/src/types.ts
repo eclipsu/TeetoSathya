@@ -39,3 +39,51 @@ export interface CreateRoomResponse {
 export interface ApiError {
   error: { code: string; message: string; details?: string[] };
 }
+
+/**
+ * Public view of a participant. `id` is a public per-room id, NOT the sessionId:
+ * the sessionId is what lets a browser reclaim a seat, so it is never broadcast.
+ */
+export interface ParticipantView {
+  id: string;
+  username: string;
+  role: Role | null;
+  team: TeamIndex | null;
+  seatOrder: number | null;
+  connected: boolean;
+  isHost: boolean;
+  /** Talk time used this round, ms (excludes the currently running stint). */
+  timeUsedMs: number;
+}
+
+export interface BuzzView {
+  participantId: string;
+  username: string;
+  at: number;
+}
+
+export interface GameView {
+  /** Participant ids in the hot seat per team. */
+  hotSeat: [string | null, string | null];
+  activeSide: TeamIndex | null;
+  /** ms remaining per side as of `clockRunningSince` (or frozen when that is null). */
+  clocks: [number, number];
+  /** Server epoch ms when the active side's clock started running; null when stopped. */
+  clockRunningSince: number | null;
+  roundEndsAt: number | null;
+  roundRemainingMs: number | null;
+  paused: boolean;
+  buzz: BuzzView | null;
+}
+
+export interface RoomSnapshot {
+  id: string;
+  topic: string;
+  sides: [string, string];
+  status: RoomStatus;
+  settings: RoomSettings;
+  participants: ParticipantView[];
+  game: GameView;
+  /** Server clock at send time; clients also keep a measured offset. */
+  serverNow: number;
+}

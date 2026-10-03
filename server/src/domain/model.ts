@@ -1,6 +1,9 @@
 import type { Role, RoomSettings, RoomStatus, TeamIndex } from '@teeto/shared';
 
 export interface Participant {
+  /** Public per-room id: broadcast in snapshots and used as the LiveKit identity. */
+  id: string;
+  /** Private: lets the same browser reclaim this record. Never broadcast. */
   sessionId: string;
   username: string;
   /** null until the user picks a role in the room. */

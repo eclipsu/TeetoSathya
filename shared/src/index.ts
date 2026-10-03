@@ -10,3 +10,4 @@ export interface HealthResponse {
 export * from './limits';
 export * from './types';
 export * from './validation';
+export * from './events';

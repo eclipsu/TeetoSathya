@@ -21,7 +21,11 @@ impersonate someone else.
      **30-second grace period**. After that, the seat and name are released.
    - **Different sessionId asks for a taken name**: rejected, with 3 suggested alternatives
      (e.g. `sita2`, `sita_7`).
-4. **Hosting**: creating a room returns a random `hostToken` (32 chars). The browser keeps it
+4. **The sessionId is never broadcast.** Each participant also gets a random public `id`
+   per room. Room snapshots, the speaking indicators and the LiveKit identity all use that
+   public id. If the sessionId were broadcast, anyone could copy someone else's from
+   DevTools and take over their seat in one click.
+5. **Hosting**: creating a room returns a random `hostToken` (32 chars). The browser keeps it
    in `localStorage` under `teeto.hostTokens`. Every host-only REST call and socket event
    must present it. The server compares it in constant time.
 
