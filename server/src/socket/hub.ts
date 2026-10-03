@@ -14,6 +14,7 @@ import type { RoomStore } from '../store/RoomStore';
 import type { Room } from '../domain/model';
 import { claimIdentity, connectedCount, markDisconnected, releaseIfExpired } from '../domain/identity';
 import { setRole } from '../domain/seats';
+import { fillEmptyHotSeats, hotSeatVacated as vacate } from '../domain/game';
 import { toSnapshot } from '../domain/snapshot';
 import { isHostToken } from '../domain/hostAuth';
 import { TokenBucket } from './rateLimit';
@@ -182,6 +183,7 @@ export class RoomHub {
       const out = await this.store.update(id, (room) => {
         const res = setRole(room, socket.data.sessionId, p?.role, p?.team);
         if (res.ok && res.changed && res.vacatedHotSeat !== null) this.hotSeatVacated(room, res.vacatedHotSeat);
+        if (res.ok && res.changed) fillEmptyHotSeats(room, Date.now());
         return { res, room };
       });
       if (!out) throw new HandlerError('room_not_found', 'This room no longer exists.');
@@ -207,8 +209,10 @@ export class RoomHub {
     socket.on('disconnect', () => void this.detach(socket, 'disconnect'));
   }
 
-  /** Game module overrides this to refill a hot seat (checkpoint E). */
-  hotSeatVacated: (room: Room, side: 0 | 1) => void = () => {};
+  /** Refill an emptied hot seat (game rules) and announce it. Called inside store.update. */
+  private hotSeatVacated(room: Room, side: 0 | 1) {
+    for (const t of vacate(room, side, Date.now())) this.toastRoom(room.id, t.type, t.message);
+  }
 
   /**
    * Socket stops being in its room.

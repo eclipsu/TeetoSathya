@@ -4,9 +4,10 @@ import { Avatar } from '../components/Avatar';
 import { ConnectionChip } from '../components/ConnectionChip';
 import { useToast } from '../components/Toasts';
 import { ArrowLeftIcon, CopyIcon, UsersIcon } from '../components/icons';
+import { api } from '../lib/api';
 import { copyText } from '../lib/clipboard';
 import { navigate } from '../lib/router';
-import { getSession } from '../lib/session';
+import { forgetHostToken, getHostToken, getSession } from '../lib/session';
 import { useRoom } from '../state/useRoom';
 import { VoiceProvider } from '../voice/VoiceProvider';
 import { VoiceDock } from '../voice/VoiceDock';
@@ -14,7 +15,11 @@ import { micClosedReason } from '../state/rules';
 import { RolePicker } from './room/RolePicker';
 import { SpectatorStrip } from './room/SpectatorStrip';
 import { TeamColumn } from './room/TeamColumn';
+import { HostControlBar } from './room/HostControlBar';
+import { Stage } from './room/Stage';
+import { Summary } from './room/Summary';
 import './room/room.css';
+import './room/stage.css';
 
 export function RoomScreen({ roomId }: { roomId: string }) {
   const room = useRoom(roomId);
@@ -27,6 +32,29 @@ export function RoomScreen({ roomId }: { roomId: string }) {
   useEffect(() => {
     if (status === 'joined' && me && me.role === null) setPickerOpen(true);
   }, [status, me]);
+
+  async function hostCall(event: string, extra: Record<string, unknown> = {}) {
+    const res = await room.call(event as never, { hostToken: getHostToken(roomId), ...extra });
+    if (!res.ok) toast('error', res.message);
+    return res.ok;
+  }
+
+  async function deleteRoom() {
+    const token = getHostToken(roomId);
+    if (!token) return toast('error', 'Host token missing on this device.');
+    try {
+      await api.deleteRoom(roomId, token);
+      forgetHostToken(roomId);
+      navigate('/');
+    } catch (err) {
+      toast('error', (err as Error).message);
+    }
+  }
+
+  async function done() {
+    const res = await room.call('turn:done');
+    if (!res.ok) toast('warn', res.message);
+  }
 
   async function pick(role: 'speaker' | 'spectator', team: TeamIndex | null) {
     setBusy(true);
@@ -44,6 +72,9 @@ export function RoomScreen({ roomId }: { roomId: string }) {
   if (!snapshot) return <RoomSkeleton />;
 
   const canTakeSeat = snapshot.status !== 'ended' && me?.role !== 'speaker';
+  const hotSeatAction = isHost && snapshot.status !== 'ended'
+    ? (side: TeamIndex, participantId: string) => void hostCall('host:setHotSeat', { side, participantId })
+    : undefined;
   const chip =
     status === 'joined' ? { state: 'ok' as const, label: 'Connected' } :
     status === 'reconnecting' ? { state: 'warn' as const, label: 'Reconnecting…' } :
@@ -89,21 +120,26 @@ export function RoomScreen({ roomId }: { roomId: string }) {
           </div>
         </header>
 
-        <main className="room__main">
-          <TeamColumn team={0} snapshot={snapshot} myId={myId} canTakeSeat={canTakeSeat} onTakeSeat={(t) => pick('speaker', t)} />
-          <section className="stage" aria-label="Stage">
-            <div className="stage__waiting glass">
-              <h2>{snapshot.status === 'lobby' ? 'Waiting for the host to start' : snapshot.status === 'live' ? 'Round live' : 'Round over'}</h2>
-              <p className="muted">
-                {snapshot.settings.turnSeconds}s per speaker · {Math.round(snapshot.settings.roundSeconds / 60)} min round
-              </p>
-              {isHost && <p className="muted">You are the host.</p>}
-            </div>
-          </section>
-          <TeamColumn team={1} snapshot={snapshot} myId={myId} canTakeSeat={canTakeSeat} onTakeSeat={(t) => pick('speaker', t)} />
-        </main>
+        {snapshot.status === 'ended' ? (
+          <main className="room__main room__main--summary">
+            <Summary snapshot={snapshot} />
+          </main>
+        ) : (
+          <main className="room__main">
+            <TeamColumn team={0} snapshot={snapshot} myId={myId} canTakeSeat={canTakeSeat} onTakeSeat={(t) => pick('speaker', t)} onHotSeat={hotSeatAction} />
+            <Stage snapshot={snapshot} myId={myId} isHost={isHost} onDone={done} />
+            <TeamColumn team={1} snapshot={snapshot} myId={myId} canTakeSeat={canTakeSeat} onTakeSeat={(t) => pick('speaker', t)} onHotSeat={hotSeatAction} />
+          </main>
+        )}
 
         <SpectatorStrip snapshot={snapshot} myId={myId} />
+
+        {isHost && <HostControlBar snapshot={snapshot} hostCall={hostCall} onDelete={deleteRoom} />}
+        {!isHost && snapshot.status === 'ended' && (
+          <div className="summary__actions">
+            <button className="btn btn--primary" onClick={() => navigate('/')}><ArrowLeftIcon /> Back to rooms</button>
+          </div>
+        )}
 
         <RolePicker
           open={pickerOpen}

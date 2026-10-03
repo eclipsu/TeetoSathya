@@ -1,0 +1,81 @@
+.stage { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.stage__round { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 14px 18px; }
+.stage__hint { margin: 0; text-align: center; font-size: 0.9rem; }
+.stage__seats { flex: 1; display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: stretch; gap: 14px; }
+.stage__vs { align-self: center; font-family: var(--font-display); font-weight: 900; font-size: 1.1rem; color: var(--text-faint); letter-spacing: 0.1em; }
+
+.hot {
+  --team: var(--team-a);
+  --team-grad: var(--team-a-grad);
+  --team-soft: rgba(56, 189, 248, 0.14);
+  --glow-color: var(--team-a);
+  display: flex; flex-direction: column; gap: 10px; min-width: 0;
+  transition: transform var(--dur-slow) var(--ease-spring), opacity var(--dur-slow), filter var(--dur-slow);
+}
+.hot--team-1 { --team: var(--team-b); --team-grad: var(--team-b-grad); --team-soft: rgba(251, 113, 133, 0.14); --glow-color: var(--team-b); }
+.hot.is-active { transform: scale(1.03); }
+.hot.is-idle { opacity: 0.55; filter: saturate(0.7); }
+
+.hot__card {
+  position: relative;
+  flex: 1;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px;
+  min-height: 300px;
+  padding: 28px 18px 22px;
+  border-radius: 22px;
+  background: radial-gradient(circle at 50% 30%, var(--team-soft), transparent 70%), var(--glass);
+  border: 1px solid var(--border);
+  backdrop-filter: blur(var(--blur));
+  overflow: hidden;
+  /* Speaking glow: radius + opacity scale with --level (0-1). Attack/release smoothing is in voice/levels.ts. */
+  box-shadow:
+    0 0 calc(var(--level, 0) * 60px) calc(var(--level, 0) * 6px) color-mix(in srgb, var(--team) calc(var(--level, 0) * 70%), transparent),
+    inset 0 0 0 1px color-mix(in srgb, var(--team) calc(var(--level, 0) * 100%), transparent);
+  transition: box-shadow 100ms linear, border-color var(--dur);
+}
+.hot.is-active .hot__card {
+  border-color: color-mix(in srgb, var(--team) 60%, transparent);
+  box-shadow:
+    0 0 calc(30px + var(--level, 0) * 60px) calc(var(--level, 0) * 8px) color-mix(in srgb, var(--team) calc(30% + var(--level, 0) * 50%), transparent),
+    inset 0 0 0 1px color-mix(in srgb, var(--team) 50%, transparent);
+}
+.hot__bar { position: absolute; inset: 0 0 auto; height: 4px; background: var(--team-grad); }
+.hot__live {
+  position: absolute; top: 14px; right: 14px;
+  padding: 3px 9px; border-radius: 6px;
+  background: #ef4444; color: #fff;
+  font-size: 0.7rem; font-weight: 900; letter-spacing: 0.12em;
+  box-shadow: 0 0 16px rgba(239, 68, 68, 0.6);
+  animation: live-blink 1.6s ease-in-out infinite;
+}
+.hot__avatar { position: relative; padding: 6px; }
+.hot__avatar .avatar { box-shadow: 0 16px 40px rgba(0, 0, 0, 0.45); }
+.hot__name { margin: 4px 0 0; display: flex; align-items: center; gap: 8px; font-family: var(--font-display); font-size: 1.4rem; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hot__state { margin: 0; font-size: 0.8rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--team); }
+.hot__mic { display: flex; align-items: center; gap: 8px; color: var(--text-dim); }
+.hot__mic .level-meter { width: 110px; height: 8px; }
+.hot__mic .level-meter__seg.is-lit { background: var(--team); box-shadow: 0 0 6px var(--team); }
+.hot__done { margin-top: 6px; }
+.hot__done kbd { font: inherit; font-size: 0.75rem; padding: 1px 6px; border-radius: 5px; background: rgba(11, 15, 26, 0.25); }
+.hot__empty { display: grid; justify-items: center; gap: 10px; }
+.hot__empty-ring { width: 120px; height: 120px; border-radius: 50%; border: 2px dashed rgba(255, 255, 255, 0.15); }
+
+/* Big ring around the hot-seat avatar while speaking */
+.hot__avatar .avatar--speaking::after { inset: -8px; border-width: 3px; }
+
+@media (max-width: 1100px) {
+  .hot__card { min-height: 250px; }
+  .hot__avatar .avatar, .hot__avatar .avatar svg, .hot__empty-ring { width: 96px !important; height: 96px !important; }
+}
+@media (max-width: 560px) {
+  .stage__seats { grid-template-columns: 1fr 1fr; }
+  .stage__vs { display: none; }
+  .hot__card { min-height: 200px; padding: 22px 10px 16px; }
+  .hot__avatar .avatar, .hot__avatar .avatar svg, .hot__empty-ring { width: 72px !important; height: 72px !important; }
+  .hot__name { font-size: 1.05rem; }
+  .hot__mic .level-meter { width: 70px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .hot.is-active { transform: none; }
+  .hot__live { animation: none; }
+}

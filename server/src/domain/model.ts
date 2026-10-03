@@ -24,6 +24,8 @@ export interface Buzz {
   sessionId: string;
   username: string;
   at: number;
+  /** Hot-seat speaker who held the floor when the buzz landed (the one being challenged). */
+  challengedSessionId: string | null;
 }
 
 export interface GameState {

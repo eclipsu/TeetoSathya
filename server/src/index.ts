@@ -9,6 +9,8 @@ import { InMemoryRoomStore } from './store/InMemoryRoomStore';
 import { deleteVoiceRoom, syncMicPermissions } from './voice/livekit';
 import { livekitRouter } from './http/livekit.routes';
 import { RoomHub, type IO } from './socket/hub';
+import { installGameHandlers } from './socket/gameHandlers';
+import { installGameTimers } from './engine/gameTimers';
 
 const store = new InMemoryRoomStore();
 
@@ -23,6 +25,8 @@ const hub = new RoomHub(io, store);
 hub.onRoomClosed((roomId) => deleteVoiceRoom(roomId));
 hub.onRoomChange((room) => void syncMicPermissions(room));
 hub.onVoiceJoined((room, participantId) => void syncMicPermissions(room, new Set([participantId])));
+installGameTimers(hub);
+installGameHandlers(hub);
 hub.start();
 
 app.use('/api', healthRouter);
