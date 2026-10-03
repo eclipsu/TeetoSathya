@@ -1,21 +1,32 @@
-import { useEffect, useState } from 'react';
-import { APP_NAME, type HealthResponse } from '@teeto/shared';
+import { useState } from 'react';
+import { SecureContextBanner } from './components/SecureContextBanner';
+import { ToastProvider } from './components/Toasts';
+import { matchRoom, usePath } from './lib/router';
+import { getSession } from './lib/session';
+import { Lobby } from './screens/Lobby';
+import { NameEntry } from './screens/NameEntry';
+import { RoomScreen } from './screens/RoomScreen';
 
 export function App() {
-  const [health, setHealth] = useState<HealthResponse | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const path = usePath();
+  const [hasName, setHasName] = useState(() => !!getSession().username);
+  const [editingName, setEditingName] = useState(false);
+  const roomId = matchRoom(path);
 
-  useEffect(() => {
-    fetch('/api/health')
-      .then((r) => r.json() as Promise<HealthResponse>)
-      .then(setHealth)
-      .catch((e: unknown) => setError(String(e)));
-  }, []);
+  let screen;
+  if (!hasName || editingName) {
+    // Entering a name is also the click that unlocks browser audio autoplay.
+    screen = <NameEntry onDone={() => { setHasName(true); setEditingName(false); }} />;
+  } else if (roomId) {
+    screen = <RoomScreen roomId={roomId} />;
+  } else {
+    screen = <Lobby onChangeName={() => setEditingName(true)} />;
+  }
 
   return (
-    <main className="placeholder">
-      <h1 className="logo">{APP_NAME}</h1>
-      <p>{health ? `Server OK · ${new Date(health.serverNow).toLocaleTimeString()}` : error ?? 'Connecting…'}</p>
-    </main>
+    <ToastProvider>
+      <SecureContextBanner />
+      {screen}
+    </ToastProvider>
   );
 }

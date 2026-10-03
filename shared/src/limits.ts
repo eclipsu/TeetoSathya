@@ -1,0 +1,16 @@
+export const LIMITS = {
+  usernameMin: 2,
+  usernameMax: 20,
+  topicMax: 120,
+  sideMax: 30,
+  speakersPerTeamMax: 4,
+  turnSecondsMin: 15,
+  turnSecondsMax: 900,
+  turnSecondsDefault: 120,
+  roundSecondsMin: 60,
+  roundSecondsMax: 7200,
+  roundSecondsDefault: 600,
+  reclaimGraceMs: 30_000,
+  idleRoomMs: 5 * 60_000,
+  maxRooms: 100,
+} as const;

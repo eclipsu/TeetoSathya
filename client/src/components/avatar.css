@@ -1,0 +1,34 @@
+.avatar {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  border-radius: 50%;
+  isolation: isolate;
+}
+.avatar svg { display: block; border-radius: 50%; }
+
+/* Speaking ring: glow scales with --level (0-1), set by useSpeaking on an ancestor. */
+.avatar::after {
+  content: '';
+  position: absolute;
+  inset: -4px;
+  border-radius: 50%;
+  border: 2px solid var(--glow-color, var(--avatar-accent));
+  opacity: 0;
+  transform: scale(0.96);
+  transition: opacity var(--dur) var(--ease-out), transform var(--dur) var(--ease-out);
+  pointer-events: none;
+}
+.avatar--speaking::after {
+  opacity: calc(0.45 + var(--level, 0.5) * 0.55);
+  transform: scale(calc(1 + var(--level, 0.5) * 0.08));
+  box-shadow: 0 0 calc(6px + var(--level, 0.5) * 22px) var(--glow-color, var(--avatar-accent));
+  animation: avatar-pulse 1.6s ease-in-out infinite;
+}
+@keyframes avatar-pulse {
+  50% { border-width: 3px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .avatar--speaking::after { animation: none; }
+}
