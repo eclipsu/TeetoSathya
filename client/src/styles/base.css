@@ -1,0 +1,11 @@
+*, *::before, *::after { box-sizing: border-box; }
+html, body, #root { height: 100%; margin: 0; }
+body {
+  background: radial-gradient(ellipse at 50% -10%, var(--bg-2), var(--bg) 60%) fixed, var(--bg);
+  color: var(--text);
+  font-family: var(--font);
+  -webkit-font-smoothing: antialiased;
+}
+:focus-visible { outline: 2px solid var(--team-a); outline-offset: 2px; }
+.placeholder { display: grid; place-content: center; text-align: center; height: 100%; }
+.logo { font-family: var(--font-display); font-size: 3rem; margin: 0; letter-spacing: -0.02em; }
