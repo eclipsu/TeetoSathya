@@ -39,7 +39,7 @@ Setup:
 | 3 | **Tab B**: name `Bob`, join from the lobby, pick **Speak for Dogs** | Tab A gets a "Bob joined" toast. Each team shows 1/4. |
 | 4 | **Tab C**: name `alice` (lowercase), open the same room | You see **Name taken** with 3 suggestions. Click one: you join with that name. |
 | 5 | Tab C: pick **Watch as spectator** | Tab C appears in the spectator strip. |
-| 6 | **Seat limits**: in Tab C, click "Speak for Dogs" (via the role button) four times using four extra profiles, or just watch the counter | A 5th Dogs speaker is refused with "Dogs is full (4 speakers max)". Spectators are unlimited. |
+| 6 | **Seat limits**: fill Dogs with 4 speakers (Bob + 3 more profiles), then try a 5th | In the role picker, "Speak for Dogs" shows **Team full** and is disabled. Clicking an open seat isn't possible. The server also refuses it (covered by `npm test` and the race test). Spectators are unlimited. |
 | 7 | **Refresh-reclaim**: reload Tab B | Bob is back in the same seat on the same team, with no role picker. Other tabs briefly see "Reconnecting…" on Bob's seat. |
 | 8 | **Mic + glow (lobby)**: Join voice in all tabs. In A and B use "Test mic" first | The Test mic meter moves when you talk. In the lobby, Alice and Bob can both talk and you hear each other. Spectator C has no mic button. The speaker's seat and avatar glow when they talk. |
 | 9 | Tab A host bar: **Start round** | Round and Cats clocks run. Only Alice can be heard: Bob's mic icon turns off and his mic is closed. Alice's hot-seat card shows LIVE and glows when she talks. |
