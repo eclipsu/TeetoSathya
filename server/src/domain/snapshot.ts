@@ -23,7 +23,9 @@ export function toSnapshot(room: Room, now: number): RoomSnapshot {
     roundEndsAt: g.roundEndsAt,
     roundRemainingMs: g.roundRemainingMs,
     paused: g.paused,
-    buzz: g.buzz ? { participantId: idOf(g.buzz.sessionId) ?? '', username: g.buzz.username, at: g.buzz.at } : null,
+    buzz: g.buzz
+      ? { participantId: idOf(g.buzz.sessionId) ?? '', username: g.buzz.username, at: g.buzz.at, challengedParticipantId: idOf(g.buzz.challengedSessionId) }
+      : null,
   };
   return { id: room.id, topic: room.topic, sides: room.sides, status: room.status, settings: room.settings, participants, game, serverNow: now };
 }

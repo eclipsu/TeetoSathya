@@ -60,6 +60,8 @@ export interface BuzzView {
   participantId: string;
   username: string;
   at: number;
+  /** Hot-seat speaker who held the floor when the buzz landed. */
+  challengedParticipantId: string | null;
 }
 
 export interface GameView {

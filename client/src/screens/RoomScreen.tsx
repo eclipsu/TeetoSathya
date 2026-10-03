@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { TeamIndex } from '@teeto/shared';
 import { Avatar } from '../components/Avatar';
 import { ConnectionChip } from '../components/ConnectionChip';
@@ -11,7 +11,13 @@ import { forgetHostToken, getHostToken, getSession } from '../lib/session';
 import { useRoom } from '../state/useRoom';
 import { VoiceProvider } from '../voice/VoiceProvider';
 import { VoiceDock } from '../voice/VoiceDock';
-import { micClosedReason } from '../state/rules';
+import { micClosedReason, spaceAction } from '../state/rules';
+import { useSpaceKey } from '../state/useSpaceKey';
+import { playBuzz, playYourTurn, primeAudio } from '../lib/sfx';
+import { SfxToggle } from '../components/SfxToggle';
+import { BuzzOverlay } from './room/BuzzOverlay';
+import { KeyHintBar } from './room/KeyHintBar';
+import './room/buzz.css';
 import { RolePicker } from './room/RolePicker';
 import { SpectatorStrip } from './room/SpectatorStrip';
 import { TeamColumn } from './room/TeamColumn';
@@ -27,6 +33,43 @@ export function RoomScreen({ roomId }: { roomId: string }) {
   const { status, snapshot, me, myId, isHost } = room;
   const [pickerOpen, setPickerOpen] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [shaking, setShaking] = useState(false);
+  const action = snapshot ? spaceAction(snapshot, myId) : null;
+  const actionRef = useRef(action);
+  actionRef.current = action;
+
+  // One press path for SPACE and the on-screen button (shared 1.5s cooldown).
+  const press = useSpaceKey(status === 'joined' && snapshot?.status === 'live', () => {
+    primeAudio();
+    const a = actionRef.current;
+    if (a?.action === 'done') void done();
+    else if (a?.action === 'buzz') void buzz();
+  });
+
+  // Buzz moment: sound + one stage shake, for everyone in the room.
+  useEffect(() => {
+    if (!room.buzzEvent) return;
+    playBuzz();
+    setShaking(true);
+    const t = setTimeout(() => setShaking(false), 400);
+    return () => clearTimeout(t);
+  }, [room.buzzEvent]);
+
+  // Chime when the floor passes to me.
+  const holdsFloor = !!snapshot && snapshot.status === 'live' && !snapshot.game.paused && !snapshot.game.buzz &&
+    snapshot.game.activeSide !== null && snapshot.game.hotSeat[snapshot.game.activeSide] === myId;
+  const prevHolds = useRef(holdsFloor);
+  useEffect(() => {
+    if (holdsFloor && !prevHolds.current) playYourTurn();
+    prevHolds.current = holdsFloor;
+  }, [holdsFloor]);
+
+  // Any click in the room unlocks Web Audio for sound effects.
+  useEffect(() => {
+    const unlock = () => primeAudio();
+    window.addEventListener('pointerdown', unlock, { once: true });
+    return () => window.removeEventListener('pointerdown', unlock);
+  }, []);
 
   // First entry: role picker opens until a role is chosen.
   useEffect(() => {
@@ -49,6 +92,12 @@ export function RoomScreen({ roomId }: { roomId: string }) {
     } catch (err) {
       toast('error', (err as Error).message);
     }
+  }
+
+  async function buzz() {
+    const res = await room.call('buzz:press', { clientAt: Date.now() });
+    if (res.ok && res.result === 'too_late') toast('info', 'Too late. Someone beat you to it.');
+    else if (!res.ok && res.code !== 'rate_limited') toast('warn', res.message);
   }
 
   async function done() {
@@ -113,7 +162,8 @@ export function RoomScreen({ roomId }: { roomId: string }) {
                 <UsersIcon width={16} height={16} /> <span className="btn__label">{me?.role === 'spectator' ? 'Spectator' : me?.team != null ? snapshot.sides[me.team] : 'Pick role'}</span>
               </button>
             )}
-            <VoiceDock isSpeaker={me?.role === 'speaker'} micReason={micClosedReason(snapshot, myId)} />
+            <SfxToggle />
+          <VoiceDock isSpeaker={me?.role === 'speaker'} micReason={micClosedReason(snapshot, myId)} />
             <span className="me-chip" title={me?.username}>
               <Avatar name={me?.username ?? getSession().username ?? '?'} size={28} />
             </span>
@@ -125,7 +175,7 @@ export function RoomScreen({ roomId }: { roomId: string }) {
             <Summary snapshot={snapshot} />
           </main>
         ) : (
-          <main className="room__main">
+          <main className={`room__main ${shaking ? 'is-shaking' : ''}`}>
             <TeamColumn team={0} snapshot={snapshot} myId={myId} canTakeSeat={canTakeSeat} onTakeSeat={(t) => pick('speaker', t)} onHotSeat={hotSeatAction} />
             <Stage snapshot={snapshot} myId={myId} isHost={isHost} onDone={done} />
             <TeamColumn team={1} snapshot={snapshot} myId={myId} canTakeSeat={canTakeSeat} onTakeSeat={(t) => pick('speaker', t)} onHotSeat={hotSeatAction} />
@@ -133,6 +183,16 @@ export function RoomScreen({ roomId }: { roomId: string }) {
         )}
 
         <SpectatorStrip snapshot={snapshot} myId={myId} />
+
+        {snapshot.status !== 'ended' && action && (
+          <KeyHintBar action={action} isSpectator={me?.role === 'spectator'} onPress={press} />
+        )}
+
+        <BuzzOverlay
+          event={room.buzzEvent}
+          locked={snapshot.game.buzz}
+          challengedName={snapshot.participants.find((p) => p.id === (snapshot.game.buzz ?? room.buzzEvent?.buzz)?.challengedParticipantId)?.username ?? null}
+        />
 
         {isHost && <HostControlBar snapshot={snapshot} hostCall={hostCall} onDelete={deleteRoom} />}
         {!isHost && snapshot.status === 'ended' && (

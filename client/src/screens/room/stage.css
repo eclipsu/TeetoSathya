@@ -60,6 +60,10 @@
 .hot__empty { display: grid; justify-items: center; gap: 10px; }
 .hot__empty-ring { width: 120px; height: 120px; border-radius: 50%; border: 2px dashed rgba(255, 255, 255, 0.15); }
 
+.hot.is-challenged { opacity: 1; filter: none; }
+.hot.is-challenged .hot__card { border-color: #f59e0b; box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.5), 0 0 40px rgba(245, 158, 11, 0.25); }
+.hot.is-challenged .hot__state { color: #fbbf24; }
+
 /* Big ring around the hot-seat avatar while speaking */
 .hot__avatar .avatar--speaking::after { inset: -8px; border-width: 3px; }
 

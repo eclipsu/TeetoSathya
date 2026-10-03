@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { io, type Socket } from 'socket.io-client';
-import type { AppError, ClientToServerEvents, JoinResult, ParticipantView, RoomSnapshot, ServerToClientEvents } from '@teeto/shared';
+import type { AppError, BuzzView, ClientToServerEvents, JoinResult, ParticipantView, RoomSnapshot, ServerToClientEvents } from '@teeto/shared';
 import { useToast } from '../components/Toasts';
 import { getHostToken, getSession, setUsername } from '../lib/session';
 import { startClockSync } from '../lib/serverClock';
@@ -22,6 +22,8 @@ export interface RoomConn {
   call: (event: keyof ClientToServerEvents, payload?: unknown) => Promise<AckResult>;
   retryWithName: (name: string) => void;
   leave: () => Promise<void>;
+  /** Latest buzz:locked event (n increments per buzz) for the dramatic overlay. */
+  buzzEvent: { buzz: BuzzView; n: number } | null;
 }
 
 const ACK_TIMEOUT = 5000;
@@ -35,6 +37,7 @@ export function useRoom(roomId: string): RoomConn {
   const [error, setError] = useState<AppError | null>(null);
   const [closedReason, setClosedReason] = useState<string | null>(null);
   const [nameAttempt, setNameAttempt] = useState(0);
+  const [buzzEvent, setBuzzEvent] = useState<{ buzz: BuzzView; n: number } | null>(null);
   const socketRef = useRef<RoomSocket | null>(null);
   const [socket, setSocket] = useState<RoomSocket | null>(null);
 
@@ -76,6 +79,7 @@ export function useRoom(roomId: string): RoomConn {
       if (snap.id === roomId) setSnapshot(snap);
     });
     s.on('toast', (t) => toast(t.type, t.message));
+    s.on('buzz:locked', (buzz) => setBuzzEvent((prev) => ({ buzz, n: (prev?.n ?? 0) + 1 })));
     s.on('error', (e) => {
       if (e.code === 'session_replaced') {
         setStatus('replaced');
@@ -121,5 +125,5 @@ export function useRoom(roomId: string): RoomConn {
 
   const me = useMemo(() => snapshot?.participants.find((p) => p.id === myId) ?? null, [snapshot, myId]);
 
-  return { status, snapshot, me, myId, isHost, error, closedReason, socket, call, retryWithName, leave };
+  return { status, snapshot, me, myId, isHost, error, closedReason, socket, call, retryWithName, leave, buzzEvent };
 }

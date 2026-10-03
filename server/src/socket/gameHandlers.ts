@@ -104,7 +104,13 @@ export function installGameHandlers(hub: RoomHub) {
         if (out.res.tooLate) return void ack?.({ ok: true, result: 'too_late' });
         throw new HandlerError('invalid_state', out.res.message);
       }
-      const view = { participantId: out.r.participants.get(sessionId)!.id, username: out.res.buzz.username, at: out.res.buzz.at };
+      const challenged = out.res.buzz.challengedSessionId ? out.r.participants.get(out.res.buzz.challengedSessionId) : undefined;
+      const view = {
+        participantId: out.r.participants.get(sessionId)!.id,
+        username: out.res.buzz.username,
+        at: out.res.buzz.at,
+        challengedParticipantId: challenged?.id ?? null,
+      };
       hub.io.to(room.id).emit('buzz:locked', view);
       for (const t of out.res.toasts) hub.toastRoom(room.id, t.type, t.message);
       ack?.({ ok: true, result: 'won' });

@@ -225,3 +225,8 @@ button.seat__open:hover .seat__take, button.seat__open:focus-visible .seat__take
 .summary__actions { display: flex; justify-content: center; }
 @media (max-width: 700px) { .summary__teams { grid-template-columns: 1fr; } }
 @media (max-width: 900px) { .host-bar .btn__label { display: none; } .host-bar { gap: 6px; } }
+
+.sfx-toggle.is-off { color: var(--text-faint); }
+.sfx-toggle.is-off svg { opacity: 0.5; }
+.sfx-toggle.is-off::after { content: ''; position: absolute; width: 22px; height: 2px; background: currentColor; transform: rotate(-45deg); }
+.sfx-toggle { position: relative; }

@@ -25,10 +25,21 @@ export function HotSeatCard({ side, snapshot: s, now, myId, onDone }: Props) {
   const ms = sideRemaining(s, side, now);
   const isMe = !!p && p.id === myId;
 
-  const state = !live ? 'Lobby' : !active ? 'Waiting' : g.buzz ? 'Challenged' : g.paused ? 'Paused' : 'Speaking';
+  const challenged = !!g.buzz && !!p && g.buzz.challengedParticipantId === p.id;
+  const state = !live
+    ? 'Lobby'
+    : challenged
+      ? 'Challenged'
+      : !active
+        ? 'Waiting'
+        : g.buzz
+          ? 'Up next'
+          : g.paused
+            ? 'Paused'
+            : 'Speaking';
 
   return (
-    <div className={`hot hot--team-${side} ${active ? 'is-active' : live ? 'is-idle' : ''} ${speaking ? 'is-speaking' : ''}`} style={levelStyle(level)}>
+    <div className={`hot hot--team-${side} ${active ? 'is-active' : live ? 'is-idle' : ''} ${speaking ? 'is-speaking' : ''} ${challenged ? 'is-challenged' : ''}`} style={levelStyle(level)}>
       <Timer ms={ms} running={holdsFloor} label={`${s.sides[side]} clock`} warn={live} />
       <article className="hot__card" aria-label={`${s.sides[side]} hot seat`}>
         <span className="hot__bar" aria-hidden="true" />
