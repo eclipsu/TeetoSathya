@@ -28,7 +28,6 @@ export function RolePicker({ open, snapshot, isHost, required, busy, onPick, onC
               className={`role-option role-option--team-${t}`}
               disabled={busy || full}
               onClick={() => onPick('speaker', t)}
-              data-autofocus={t === 0 ? true : undefined}
             >
               <MicIcon />
               <span className="role-option__title">Speak for {snapshot.sides[t]}</span>

@@ -10,7 +10,8 @@ interface Props {
 /** Bottom bar: what SPACE does right now (or why not) + the big on-screen button for touch. */
 export function KeyHintBar({ action, isSpectator, onPress }: Props) {
   const enabled = action.action !== null;
-  const showButton = isSpectator || action.action === 'done';
+  // Spectators get the big touch target; the active speaker's I'm-done button lives on their card.
+  const showButton = isSpectator;
   return (
     <div className={`keyhint ${enabled ? 'is-on' : 'is-off'} ${action.action === 'done' ? 'keyhint--done' : ''}`}>
       <span className="keyhint__key"><kbd>SPACE</kbd>{action.label && <> = {action.label}</>}</span>

@@ -28,8 +28,9 @@ export function Modal({ open, onClose, title, children, sheet = false, dismissib
     if (open && !d.open) {
       d.showModal();
       openCount++;
-      // React's autoFocus doesn't survive showModal(); honor an explicit marker instead.
-      d.querySelector<HTMLElement>('[data-autofocus]')?.focus();
+      // React's autoFocus doesn't survive showModal(); honor an explicit marker, else focus the
+      // title (never a choice button: Space/Enter would silently activate it).
+      (d.querySelector<HTMLElement>('[data-autofocus]') ?? d.querySelector<HTMLElement>('#modal-title'))?.focus();
       return () => {
         openCount--;
         if (d.open) d.close();
@@ -53,7 +54,7 @@ export function Modal({ open, onClose, title, children, sheet = false, dismissib
       {open && (
         <div className="modal__body">
           <header className="modal__head">
-            <h2 id="modal-title">{title}</h2>
+            <h2 id="modal-title" tabIndex={-1}>{title}</h2>
             {dismissible && (
               <button className="icon-btn" onClick={onClose} aria-label="Close">
                 <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">

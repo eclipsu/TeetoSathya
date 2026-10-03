@@ -30,3 +30,4 @@
   }
 }
 @media (prefers-reduced-motion: reduce) { .modal[open] { animation: none; } }
+.modal__head h2:focus { outline: none; }

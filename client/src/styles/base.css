@@ -180,3 +180,11 @@ select.input option { background: var(--bg-2); }
 
 .placeholder { display: grid; place-content: center; justify-items: center; gap: 12px; text-align: center; min-height: 100vh; }
 .logo { font-family: var(--font-display); font-size: 3rem; margin: 0; letter-spacing: -0.02em; }
+
+/* Icon-only buttons at narrow widths keep their text for screen readers. */
+@media (max-width: 900px) {
+  .host-bar .btn__label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+}
+@media (max-width: 560px) {
+  .room__header .btn__label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+}

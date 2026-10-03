@@ -71,6 +71,13 @@ export function RoomScreen({ roomId }: { roomId: string }) {
     return () => window.removeEventListener('pointerdown', unlock);
   }, []);
 
+  useEffect(() => {
+    if (!snapshot) return;
+    const prev = document.title;
+    document.title = `${snapshot.status === 'live' ? '● ' : ''}${snapshot.topic} · TeetoSathya`;
+    return () => { document.title = prev; };
+  }, [snapshot?.topic, snapshot?.status]);
+
   // First entry: role picker opens until a role is chosen.
   useEffect(() => {
     if (status === 'joined' && me && me.role === null) setPickerOpen(true);
@@ -131,7 +138,7 @@ export function RoomScreen({ roomId }: { roomId: string }) {
 
   return (
     <VoiceProvider roomId={roomId} onConnected={() => void room.call('voice:joined')}>
-      <div className="room" data-status={snapshot.status}>
+      <div className="room" data-status={snapshot.status} data-host={isHost}>
         <header className="room__header">
           <div className="room__header-left">
             <button className="icon-btn" onClick={async () => { await room.leave(); navigate('/'); }} aria-label="Leave room">
@@ -184,9 +191,12 @@ export function RoomScreen({ roomId }: { roomId: string }) {
 
         <SpectatorStrip snapshot={snapshot} myId={myId} />
 
-        {snapshot.status !== 'ended' && action && (
-          <KeyHintBar action={action} isSpectator={me?.role === 'spectator'} onPress={press} />
-        )}
+        <div className="room__footer">
+          {snapshot.status !== 'ended' && action && (
+            <KeyHintBar action={action} isSpectator={me?.role === 'spectator'} onPress={press} />
+          )}
+          {isHost && <HostControlBar snapshot={snapshot} hostCall={hostCall} onDelete={deleteRoom} />}
+        </div>
 
         <BuzzOverlay
           event={room.buzzEvent}
@@ -194,7 +204,6 @@ export function RoomScreen({ roomId }: { roomId: string }) {
           challengedName={snapshot.participants.find((p) => p.id === (snapshot.game.buzz ?? room.buzzEvent?.buzz)?.challengedParticipantId)?.username ?? null}
         />
 
-        {isHost && <HostControlBar snapshot={snapshot} hostCall={hostCall} onDelete={deleteRoom} />}
         {!isHost && snapshot.status === 'ended' && (
           <div className="summary__actions">
             <button className="btn btn--primary" onClick={() => navigate('/')}><ArrowLeftIcon /> Back to rooms</button>

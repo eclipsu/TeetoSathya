@@ -47,7 +47,7 @@ export function HostControlBar({ snapshot: s, hostCall, onDelete }: Props) {
               {ROUND_OPTIONS.map((v) => <option key={v} value={v}>{fmt(v)}</option>)}
             </select>
           </label>
-          <button className="btn btn--primary btn--sm" disabled={busy} onClick={() => run('host:startRound')}>
+          <button className="btn btn--primary btn--sm" disabled={busy} onClick={() => run('host:startRound')} title="Start round">
             <PlayIcon width={16} height={16} /> <span className="btn__label">Start round</span>
           </button>
         </>
@@ -56,19 +56,19 @@ export function HostControlBar({ snapshot: s, hostCall, onDelete }: Props) {
       {s.status === 'live' && (
         <>
           {g.buzz ? (
-            <button className="btn btn--sm btn--buzz" disabled={busy} onClick={() => run('buzz:dismiss')}>
+            <button className="btn btn--sm btn--buzz" disabled={busy} onClick={() => run('buzz:dismiss')} title="Dismiss / Resume">
               <BellIcon width={16} height={16} /> <span className="btn__label">Dismiss / Resume</span>
             </button>
           ) : g.paused ? (
-            <button className="btn btn--primary btn--sm" disabled={busy} onClick={() => run('host:resume')}>
+            <button className="btn btn--primary btn--sm" disabled={busy} onClick={() => run('host:resume')} title="Resume">
               <PlayIcon width={16} height={16} /> <span className="btn__label">Resume</span>
             </button>
           ) : (
-            <button className="btn btn--sm" disabled={busy} onClick={() => run('host:pause')}>
+            <button className="btn btn--sm" disabled={busy} onClick={() => run('host:pause')} title="Pause">
               <PauseIcon width={16} height={16} /> <span className="btn__label">Pause</span>
             </button>
           )}
-          <button className="btn btn--sm" disabled={busy || !!g.buzz} onClick={() => run('host:nextTurn')}>
+          <button className="btn btn--sm" disabled={busy || !!g.buzz} onClick={() => run('host:nextTurn')} title="Switch turn">
             <SwitchIcon width={16} height={16} /> <span className="btn__label">Switch turn</span>
           </button>
           {([0, 1] as const).map((side) => (
@@ -76,13 +76,13 @@ export function HostControlBar({ snapshot: s, hostCall, onDelete }: Props) {
               <RotateIcon width={16} height={16} /> <span className="btn__label">Rotate {s.sides[side]}</span>
             </button>
           ))}
-          <button className="btn btn--sm" disabled={busy} onClick={() => setConfirm('end')}>
+          <button className="btn btn--sm" disabled={busy} onClick={() => setConfirm('end')} title="End round">
             <StopIcon width={16} height={16} /> <span className="btn__label">End round</span>
           </button>
         </>
       )}
 
-      <button className="btn btn--danger btn--sm" disabled={busy} onClick={() => setConfirm('delete')}>
+      <button className="btn btn--danger btn--sm" disabled={busy} onClick={() => setConfirm('delete')} title="End & delete room">
         <TrashIcon width={16} height={16} /> <span className="btn__label">End &amp; delete room</span>
       </button>
 
