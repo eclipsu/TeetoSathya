@@ -6,7 +6,8 @@ import { config } from './config';
 import { healthRouter } from './http/health';
 import { roomsRouter } from './http/rooms.routes';
 import { InMemoryRoomStore } from './store/InMemoryRoomStore';
-import { deleteVoiceRoom } from './voice/livekit';
+import { deleteVoiceRoom, syncMicPermissions } from './voice/livekit';
+import { livekitRouter } from './http/livekit.routes';
 import { RoomHub, type IO } from './socket/hub';
 
 const store = new InMemoryRoomStore();
@@ -20,9 +21,12 @@ const io: IO = new Server(httpServer, { cors: { origin: true } });
 
 const hub = new RoomHub(io, store);
 hub.onRoomClosed((roomId) => deleteVoiceRoom(roomId));
+hub.onRoomChange((room) => void syncMicPermissions(room));
+hub.onVoiceJoined((room, participantId) => void syncMicPermissions(room, new Set([participantId])));
 hub.start();
 
 app.use('/api', healthRouter);
+app.use('/api', livekitRouter(store));
 app.use('/api', roomsRouter({ store, closeRoom: (id, reason) => hub.closeRoom(id, reason) }));
 
 httpServer.listen(config.port, '0.0.0.0', () => {

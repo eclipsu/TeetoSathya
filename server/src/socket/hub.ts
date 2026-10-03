@@ -53,6 +53,10 @@ export class RoomHub {
   onRoomClosed(hook: RoomClosedHook) {
     this.closedHooks.push(hook);
   }
+  private voiceJoinedHooks: ((room: Room, participantId: string) => void)[] = [];
+  onVoiceJoined(hook: (room: Room, participantId: string) => void) {
+    this.voiceJoinedHooks.push(hook);
+  }
 
   start() {
     // Handshake: every socket must carry a well-formed sessionId.
@@ -184,6 +188,15 @@ export class RoomHub {
       if (!out.res.ok) throw new HandlerError(out.res.code, out.res.message);
       ack?.({ ok: true });
       if (out.res.changed) await this.changed(out.room);
+    });
+
+    // Client finished connecting to LiveKit: re-apply its mic permission in case policy
+    // changed between minting the token and the LiveKit connection completing.
+    this.handle(socket, 'voice:joined', async (ack) => {
+      const room = await this.requireRoom(socket);
+      const p = room.participants.get(socket.data.sessionId)!;
+      for (const hook of this.voiceJoinedHooks) hook(room, p.id);
+      ack?.({ ok: true });
     });
 
     this.handle(socket, 'room:leave', async (ack) => {

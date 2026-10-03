@@ -64,6 +64,7 @@ code { font-family: var(--font-mono); font-size: 0.88em; background: rgba(255, 2
   justify-content: center;
   gap: 8px;
   padding: 10px 16px;
+  white-space: nowrap;
   border-radius: 12px;
   border: 1px solid var(--border-strong);
   background: var(--glass-strong);

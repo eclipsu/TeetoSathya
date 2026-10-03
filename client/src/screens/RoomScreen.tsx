@@ -8,6 +8,9 @@ import { copyText } from '../lib/clipboard';
 import { navigate } from '../lib/router';
 import { getSession } from '../lib/session';
 import { useRoom } from '../state/useRoom';
+import { VoiceProvider } from '../voice/VoiceProvider';
+import { VoiceDock } from '../voice/VoiceDock';
+import { micClosedReason } from '../state/rules';
 import { RolePicker } from './room/RolePicker';
 import { SpectatorStrip } from './room/SpectatorStrip';
 import { TeamColumn } from './room/TeamColumn';
@@ -47,69 +50,72 @@ export function RoomScreen({ roomId }: { roomId: string }) {
     { state: 'idle' as const, label: 'Connecting…' };
 
   return (
-    <div className="room" data-status={snapshot.status}>
-      <header className="room__header">
-        <div className="room__header-left">
-          <button className="icon-btn" onClick={async () => { await room.leave(); navigate('/'); }} aria-label="Leave room">
-            <ArrowLeftIcon />
-          </button>
-          <ConnectionChip {...chip} />
-        </div>
-        <div className="room__title">
-          <h1 className="room__topic">{snapshot.topic}</h1>
-          <div className="versus">
-            <span className="side-pill side-pill--a">{snapshot.sides[0]}</span>
-            <span className="versus__vs">vs</span>
-            <span className="side-pill side-pill--b">{snapshot.sides[1]}</span>
-          </div>
-        </div>
-        <div className="room__header-right">
-          <button
-            className="btn btn--ghost btn--sm"
-            onClick={async () => {
-              const ok = await copyText(location.href);
-              toast(ok ? 'success' : 'warn', ok ? 'Room link copied.' : `Copy this link: ${location.href}`);
-            }}
-          >
-            <CopyIcon width={16} height={16} /> <span className="btn__label">Copy link</span>
-          </button>
-          {snapshot.status !== 'ended' && (
-            <button className="btn btn--ghost btn--sm" onClick={() => setPickerOpen(true)}>
-              <UsersIcon width={16} height={16} /> <span className="btn__label">{me?.role === 'spectator' ? 'Spectator' : me?.team != null ? snapshot.sides[me.team] : 'Pick role'}</span>
+    <VoiceProvider roomId={roomId} onConnected={() => void room.call('voice:joined')}>
+      <div className="room" data-status={snapshot.status}>
+        <header className="room__header">
+          <div className="room__header-left">
+            <button className="icon-btn" onClick={async () => { await room.leave(); navigate('/'); }} aria-label="Leave room">
+              <ArrowLeftIcon />
             </button>
-          )}
-          <span className="me-chip" title={me?.username}>
-            <Avatar name={me?.username ?? getSession().username ?? '?'} size={28} />
-          </span>
-        </div>
-      </header>
-
-      <main className="room__main">
-        <TeamColumn team={0} snapshot={snapshot} myId={myId} canTakeSeat={canTakeSeat} onTakeSeat={(t) => pick('speaker', t)} />
-        <section className="stage" aria-label="Stage">
-          <div className="stage__waiting glass">
-            <h2>{snapshot.status === 'lobby' ? 'Waiting for the host to start' : snapshot.status === 'live' ? 'Round live' : 'Round over'}</h2>
-            <p className="muted">
-              {snapshot.settings.turnSeconds}s per speaker · {Math.round(snapshot.settings.roundSeconds / 60)} min round
-            </p>
-            {isHost && <p className="muted">You are the host.</p>}
+            <ConnectionChip {...chip} />
           </div>
-        </section>
-        <TeamColumn team={1} snapshot={snapshot} myId={myId} canTakeSeat={canTakeSeat} onTakeSeat={(t) => pick('speaker', t)} />
-      </main>
+          <div className="room__title">
+            <h1 className="room__topic">{snapshot.topic}</h1>
+            <div className="versus">
+              <span className="side-pill side-pill--a">{snapshot.sides[0]}</span>
+              <span className="versus__vs">vs</span>
+              <span className="side-pill side-pill--b">{snapshot.sides[1]}</span>
+            </div>
+          </div>
+          <div className="room__header-right">
+            <button
+              className="btn btn--ghost btn--sm"
+              onClick={async () => {
+                const ok = await copyText(location.href);
+                toast(ok ? 'success' : 'warn', ok ? 'Room link copied.' : `Copy this link: ${location.href}`);
+              }}
+            >
+              <CopyIcon width={16} height={16} /> <span className="btn__label">Copy link</span>
+            </button>
+            {snapshot.status !== 'ended' && (
+              <button className="btn btn--ghost btn--sm" onClick={() => setPickerOpen(true)}>
+                <UsersIcon width={16} height={16} /> <span className="btn__label">{me?.role === 'spectator' ? 'Spectator' : me?.team != null ? snapshot.sides[me.team] : 'Pick role'}</span>
+              </button>
+            )}
+            <VoiceDock isSpeaker={me?.role === 'speaker'} micReason={micClosedReason(snapshot, myId)} />
+            <span className="me-chip" title={me?.username}>
+              <Avatar name={me?.username ?? getSession().username ?? '?'} size={28} />
+            </span>
+          </div>
+        </header>
 
-      <SpectatorStrip snapshot={snapshot} myId={myId} />
+        <main className="room__main">
+          <TeamColumn team={0} snapshot={snapshot} myId={myId} canTakeSeat={canTakeSeat} onTakeSeat={(t) => pick('speaker', t)} />
+          <section className="stage" aria-label="Stage">
+            <div className="stage__waiting glass">
+              <h2>{snapshot.status === 'lobby' ? 'Waiting for the host to start' : snapshot.status === 'live' ? 'Round live' : 'Round over'}</h2>
+              <p className="muted">
+                {snapshot.settings.turnSeconds}s per speaker · {Math.round(snapshot.settings.roundSeconds / 60)} min round
+              </p>
+              {isHost && <p className="muted">You are the host.</p>}
+            </div>
+          </section>
+          <TeamColumn team={1} snapshot={snapshot} myId={myId} canTakeSeat={canTakeSeat} onTakeSeat={(t) => pick('speaker', t)} />
+        </main>
 
-      <RolePicker
-        open={pickerOpen}
-        snapshot={snapshot}
-        isHost={isHost}
-        required={me?.role === null}
-        busy={busy}
-        onPick={pick}
-        onClose={() => setPickerOpen(false)}
-      />
-    </div>
+        <SpectatorStrip snapshot={snapshot} myId={myId} />
+
+        <RolePicker
+          open={pickerOpen}
+          snapshot={snapshot}
+          isHost={isHost}
+          required={me?.role === null}
+          busy={busy}
+          onPick={pick}
+          onClose={() => setPickerOpen(false)}
+        />
+      </div>
+    </VoiceProvider>
   );
 }
 

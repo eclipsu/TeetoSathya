@@ -47,6 +47,8 @@ export interface ClientToServerEvents {
   'room:join': (p: JoinPayload, ack: Ack<JoinResult>) => void;
   'role:set': (p: { role: Role; team: TeamIndex | null }, ack: Ack) => void;
   'room:leave': (ack?: Ack) => void;
+  /** Sent after the LiveKit connection is up so the server re-syncs mic permission. */
+  'voice:joined': (ack?: Ack) => void;
   /** NTP-lite: server replies with its clock so the client can estimate offset. */
   'time:ping': (ack: (serverNow: number) => void) => void;
 

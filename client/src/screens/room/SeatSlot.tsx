@@ -1,5 +1,6 @@
 import type { ParticipantView, TeamIndex } from '@teeto/shared';
 import { Avatar } from '../../components/Avatar';
+import { levelStyle, useSpeaking } from '../../voice/useSpeaking';
 
 interface SeatSlotProps {
   seat: number;
@@ -13,28 +14,35 @@ interface SeatSlotProps {
   onHotSeat?: () => void;
 }
 
-export function SeatSlot({ seat, team, participant: p, isMe, inHotSeat, onTake, onHotSeat }: SeatSlotProps) {
-  if (!p) {
-    return (
-      <li className="seat seat--empty">
-        {onTake ? (
-          <button className="seat__open" onClick={onTake}>
-            <span className="seat__num">{seat}</span> Open seat <span className="seat__take">Take seat</span>
-          </button>
-        ) : (
-          <span className="seat__open seat__open--static">
-            <span className="seat__num">{seat}</span> Open seat
-          </span>
-        )}
-      </li>
-    );
-  }
+export function SeatSlot(props: SeatSlotProps) {
+  return props.participant ? <FilledSeat {...props} participant={props.participant} /> : <EmptySeat {...props} />;
+}
+
+function EmptySeat({ seat, onTake }: SeatSlotProps) {
+  return (
+    <li className="seat seat--empty">
+      {onTake ? (
+        <button className="seat__open" onClick={onTake}>
+          <span className="seat__num">{seat}</span> Open seat <span className="seat__take">Take seat</span>
+        </button>
+      ) : (
+        <span className="seat__open seat__open--static">
+          <span className="seat__num">{seat}</span> Open seat
+        </span>
+      )}
+    </li>
+  );
+}
+
+function FilledSeat({ team, participant: p, isMe, inHotSeat, onHotSeat }: SeatSlotProps & { participant: ParticipantView }) {
+  const { speaking, level } = useSpeaking(p.id);
   return (
     <li
-      className={`seat seat--filled seat--team-${team} ${inHotSeat ? 'seat--hot' : ''} ${p.connected ? '' : 'seat--away'}`}
+      className={`seat seat--filled seat--team-${team} ${inHotSeat ? 'seat--hot' : ''} ${p.connected ? '' : 'seat--away'} ${speaking ? 'is-speaking' : ''}`}
       data-participant={p.id}
+      style={levelStyle(level)}
     >
-      <Avatar name={p.username} size={40} />
+      <Avatar name={p.username} size={40} speaking={speaking} />
       <div className="seat__info">
         <span className="seat__name">
           {p.username}
