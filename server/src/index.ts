@@ -6,7 +6,7 @@ import { config } from './config';
 import { healthRouter } from './http/health';
 import { roomsRouter } from './http/rooms.routes';
 import { InMemoryRoomStore } from './store/InMemoryRoomStore';
-import { deleteVoiceRoom, syncMicPermissions } from './voice/livekit';
+import { closeVoiceIfEnded, deleteVoiceRoom, forgetVoiceRoom, syncMicPermissions } from './voice/livekit';
 import { livekitRouter } from './http/livekit.routes';
 import { RoomHub, type IO } from './socket/hub';
 import { installGameHandlers } from './socket/gameHandlers';
@@ -25,8 +25,11 @@ const httpServer = createServer(app);
 const io: IO = new Server(httpServer, { cors: { origin: true } });
 
 const hub = new RoomHub(io, store);
-hub.onRoomClosed((roomId) => deleteVoiceRoom(roomId));
-hub.onRoomChange((room) => void syncMicPermissions(room));
+hub.onRoomClosed((roomId) => deleteVoiceRoom(roomId).finally(() => forgetVoiceRoom(roomId)));
+hub.onRoomChange((room) => {
+  closeVoiceIfEnded(room);
+  void syncMicPermissions(room);
+});
 hub.onVoiceJoined((room, participantId) => void syncMicPermissions(room, new Set([participantId])));
 installGameTimers(hub);
 installGameHandlers(hub);

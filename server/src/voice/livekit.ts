@@ -16,6 +16,27 @@ export async function deleteVoiceRoom(roomId: string): Promise<void> {
   appliedByRoom.delete(roomId);
 }
 
+/** Room is gone entirely: forget it. */
+export function forgetVoiceRoom(roomId: string): void {
+  endedVoice.delete(roomId);
+  appliedByRoom.delete(roomId);
+  queueByRoom.delete(roomId);
+}
+
+/** Rooms whose voice was already torn down after the round ended, so it happens once. */
+const endedVoice = new Set<string>();
+
+/**
+ * Round over: delete the LiveKit room. That disconnects every participant and closes all of
+ * their media (UDP/TCP) on the server side; the token route refuses new joins for ended rooms.
+ */
+export function closeVoiceIfEnded(room: Room): void {
+  if (room.status !== 'ended' || endedVoice.has(room.id)) return;
+  endedVoice.add(room.id);
+  queueByRoom.delete(room.id);
+  void deleteVoiceRoom(room.id);
+}
+
 export async function mintToken(roomId: string, identity: string, name: string, publish: boolean): Promise<string> {
   const at = new AccessToken(config.livekitApiKey, config.livekitApiSecret, { identity, name, ttl: '1h' });
   at.addGrant({ roomJoin: true, room: roomId, canSubscribe: true, canPublish: publish, canPublishData: false });
@@ -37,6 +58,7 @@ function isNotFound(err: unknown) {
  * token is minted with the current policy and they re-sync via `voice:joined`.
  */
 export function syncMicPermissions(room: Room, force: Set<string> = new Set()): Promise<void> {
+  if (room.status === 'ended') return Promise.resolve();
   const desired = new Map<string, boolean>();
   for (const p of room.participants.values()) desired.set(p.id, canPublish(room, p));
   const applied = appliedByRoom.get(room.id) ?? new Map<string, boolean>();

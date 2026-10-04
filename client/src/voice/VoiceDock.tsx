@@ -13,6 +13,14 @@ export function VoiceDock({ isSpeaker, micReason }: { isSpeaker: boolean; micRea
   const [dialog, setDialog] = useState(false);
   const myLevel = useMicLevel(v.localMicTrack);
 
+  if (v.closed) {
+    return (
+      <div className="voice-dock">
+        <ConnectionChip state="idle" label="Voice closed" />
+      </div>
+    );
+  }
+
   if (v.status === 'idle' || v.status === 'error') {
     return (
       <div className="voice-dock">

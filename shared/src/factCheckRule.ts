@@ -39,7 +39,7 @@ export function factCheckBlockReason(ctx: FactCheckContext): string | null {
 
 /**
  * Client mirror of server `canPublish` for one public participant id.
- * Lobby / ended: speakers may talk. Live: only the active hot seat, and only
+ * Lobby: speakers may talk. Ended: nobody. Live: only the active hot seat, and only
  * while the clock is running (pause, buzz, and fact-check all close the mic).
  */
 export function publishingFromSnapshot(
@@ -48,6 +48,7 @@ export function publishingFromSnapshot(
 ): boolean {
   const me = s.participants.find((p) => p.id === participantId);
   if (!me || me.role !== "speaker") return false;
+  if (s.status === "ended") return false;
   if (s.status !== "live") return true;
   const g = s.game;
   if (g.paused || g.buzz || g.factCheck || g.activeSide === null) return false;

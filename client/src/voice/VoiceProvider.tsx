@@ -23,6 +23,8 @@ export type VoiceStatus = 'idle' | 'connecting' | 'connected' | 'reconnecting' |
 
 export interface VoiceApi {
   status: VoiceStatus;
+  /** The round ended: voice is closed for this room. */
+  closed: boolean;
   error: string | null;
   /** Server says this user may publish right now (mic policy). */
   canPublish: boolean;
@@ -59,12 +61,14 @@ interface Props {
   roomId: string;
   /** Cut the local mic immediately, before LiveKit's permission update arrives. */
   holdMic?: boolean;
+  /** Round is over: disconnect, release the mic and refuse to rejoin. */
+  ended?: boolean;
   /** Called after LiveKit connects so the server re-applies mic permission. */
   onConnected: () => void;
   children: ReactNode;
 }
 
-export function VoiceProvider({ roomId, holdMic = false, onConnected, children }: Props) {
+export function VoiceProvider({ roomId, holdMic = false, ended = false, onConnected, children }: Props) {
   const roomRef = useRef<Room | null>(null);
   const metersRef = useRef<TrackMeters | null>(null);
   const audioHost = useRef<HTMLDivElement | null>(null);
@@ -95,8 +99,11 @@ export function VoiceProvider({ roomId, holdMic = false, onConnected, children }
     else metersRef.current?.remove(id);
   }, []);
 
+  const endedRef = useRef(ended);
+  endedRef.current = ended;
+
   const join = useCallback(async () => {
-    if (roomRef.current) return;
+    if (roomRef.current || endedRef.current) return;
     const meters = (metersRef.current ??= new TrackMeters());
     meters.ensureContext(); // still inside the click: lets the AudioContext start
     setStatus('connecting');
@@ -164,6 +171,8 @@ export function VoiceProvider({ roomId, holdMic = false, onConnected, children }
         });
 
       await room.connect(livekitUrl(), body.token, { autoSubscribe: true });
+      // The round ended while we were connecting: don't stay in.
+      if (endedRef.current) throw new Error('The round is over. Voice is closed.');
       setCanPublish(!!room.localParticipant.permissions?.canPublish);
       // Join was a click, so this usually succeeds; if not, we show "Enable audio".
       await room.startAudio().catch(() => {});
@@ -192,7 +201,9 @@ export function VoiceProvider({ roomId, holdMic = false, onConnected, children }
     levels.setSource(null);
     metersRef.current?.dispose();
     metersRef.current = null;
-    void room?.disconnect();
+    void room?.disconnect(true); // true: stop local tracks so the mic device is released
+    // Remote audio elements are detached on unsubscribe; clear any stragglers so nothing keeps playing.
+    audioHost.current?.replaceChildren();
     setStatus('idle');
     setMicLive(false);
     setLocalMicTrack(null);
@@ -222,6 +233,14 @@ export function VoiceProvider({ roomId, holdMic = false, onConnected, children }
 
   useEffect(() => () => leave(), [leave]);
 
+  // Round over: hang up. disconnect() stops and releases local tracks (the browser's mic
+  // indicator goes off), closes the peer connections, and the meters' AudioContext closes.
+  useEffect(() => {
+    if (!ended) return;
+    leave();
+    setError(null);
+  }, [ended, leave]);
+
   const toggleMic = useCallback(() => {
     setMicError(null);
     setWantMic((w) => !w);
@@ -243,8 +262,8 @@ export function VoiceProvider({ roomId, holdMic = false, onConnected, children }
   }, []);
 
   const api = useMemo<VoiceApi>(
-    () => ({ status, error, canPublish, wantMic, micLive, micError, audioBlocked, volume, localMicTrack, join, leave, toggleMic, setVolume, unlockAudio }),
-    [status, error, canPublish, wantMic, micLive, micError, audioBlocked, volume, localMicTrack, join, leave, toggleMic, setVolume, unlockAudio],
+    () => ({ status, closed: ended, error, canPublish, wantMic, micLive, micError, audioBlocked, volume, localMicTrack, join, leave, toggleMic, setVolume, unlockAudio }),
+    [status, ended, error, canPublish, wantMic, micLive, micError, audioBlocked, volume, localMicTrack, join, leave, toggleMic, setVolume, unlockAudio],
   );
 
   return (

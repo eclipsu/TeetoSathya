@@ -15,6 +15,7 @@ export function livekitRouter(store: RoomStore): Router {
     if (!room) return sendError(res, 404, 'not_found', 'Room not found.');
     const p = room.participants.get(sessionId);
     if (!p) return sendError(res, 403, 'not_joined', 'Join the room before joining voice.');
+    if (room.status === 'ended') return sendError(res, 410, 'round_over', 'The round is over. Voice is closed.');
 
     const publish = canPublish(room, p);
     // Identity is the PUBLIC participant id: other LiveKit clients can see identities.

@@ -217,7 +217,7 @@ export function RoomScreen({ roomId }: { roomId: string }) {
     { state: 'idle' as const, label: 'Connecting…' };
 
   return (
-    <VoiceProvider roomId={roomId} holdMic={!!snapshot.game.factCheck} onConnected={() => void room.call('voice:joined')}>
+    <VoiceProvider roomId={roomId} holdMic={!!snapshot.game.factCheck} ended={snapshot.status === 'ended'} onConnected={() => void room.call('voice:joined')}>
       {hostedSpacetimeDatabase ? <HostedRoomSubscription roomId={roomId} /> : null}
       <FloorCapture socket={room.socket} enabled={holdsFloor} />
       <div className="room" data-status={snapshot.status} data-host={isHost}>

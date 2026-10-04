@@ -3,6 +3,7 @@ import type { RoomSnapshot } from '@teeto/shared';
 /** Client-side mirror of the server mic policy, used only to EXPLAIN why the mic is closed. */
 export function micClosedReason(s: RoomSnapshot, myId: string | null): string | null {
   const me = s.participants.find((p) => p.id === myId);
+  if (s.status === 'ended') return 'Round over — voice closed';
   if (!me || me.role !== 'speaker') return 'Spectators listen only';
   if (s.status !== 'live') return null;
   const g = s.game;

@@ -303,3 +303,11 @@ describe('round winner', () => {
     expect(game.pickWinner(room, 1).ok).toBe(false);
   });
 });
+
+describe('voice after the round', () => {
+  it('nobody may publish once the round has ended, including the hot seat', () => {
+    const room = liveRoom();
+    game.endRound(room, T0 + 1000);
+    for (const p of room.participants.values()) expect(canPublish(room, p)).toBe(false);
+  });
+});
