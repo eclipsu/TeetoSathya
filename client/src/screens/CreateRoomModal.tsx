@@ -49,7 +49,7 @@ export function CreateRoomModal({ open, onClose, onCreated }: { open: boolean; o
   return (
     <Modal open={open} onClose={onClose} title="Create a debate room" sheet>
       <form onSubmit={submit} className="stack" noValidate>
-        <p className="muted modal__lead">A live debate. Opponents can fact-check claims. A wrong claim is +100. A claim that holds is −50. Speaking time starts at the defaults; change the clocks in the room before you start.</p>
+        <p className="muted modal__lead">Use a clear question and concise labels for both sides.</p>
 
         <label className="field">
           <span className="field__label">

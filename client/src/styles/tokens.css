@@ -1,55 +1,59 @@
 :root {
   color-scheme: dark;
 
-  --bg: #090e12;
-  --bg-raised: #101419;
-  --surface: #101419;
-  --surface-raised: #161b20;
-  --surface-hover: #1c2228;
-  --border: #24292f;
-  --scrim: rgba(9, 14, 18, 0.9);
+  /* Surfaces (flat, solid) */
+  --bg: #0f1115;
+  --surface: #161a20;
+  --surface-raised: #1c2128;
+  --surface-hover: #222831;
+  --border: #2a3038;
+  --scrim: rgba(15, 17, 21, 0.85);
 
-  --text: #f0f3f1;
-  --text-dim: #8b9095;
-  --text-faint: #6d7378;
+  /* Text */
+  --text: #e6e8eb;
+  --text-dim: #8b93a0;
+  --text-faint: #5b6370;
 
-  --accent: #3ecf8e;
-  --accent-ink: #0c0d0c;
-
-  --team-a: #315c8c;
-  --team-b: #a94a3f;
+  /* Teams: markers only (dots, 1px borders, speaking ring) */
+  --team-a: #4f8cff;
+  --team-b: #e8873a;
 
   /* Fact-check jurors: identity marks only */
-  --juror-gemini: #3a7f78;
-  --juror-claude: #7a62b3;
+  --juror-gemini: #3e8f86;
+  --juror-claude: #8a6fc9;
 
-  --ok: #3e9b67;
-  --warn: #c58a32;
-  --danger: #d4483b;
-  --focus: #3ecf8e;
+  /* Status */
+  --ok: #3fb27f;
+  --warn: #d9a441;
+  --danger: #e5484d;
+  --focus: #4f8cff;
 
-  --radius: 10px;
-  --radius-sm: 8px;
-  --radius-pill: 8px;
+  /* Shape */
+  --radius: 8px;
+  --radius-sm: 6px;
+  --radius-pill: 999px;
 
+  /* Spacing */
   --s1: 4px;
   --s2: 8px;
   --s3: 12px;
   --s4: 16px;
   --s5: 24px;
   --s6: 32px;
-  --s7: 40px;
-  --s8: 56px;
+  --s7: 48px;
+  --s8: 64px;
 
+  /* Type */
   --font: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-  --fs-display: clamp(2.4rem, 4.6vw, 4.25rem);
-  --fs-timer-lg: clamp(2.6rem, 4vw, 4.5rem);
-  --fs-timer-md: clamp(1.4rem, 1.6vw, 1.9rem);
-  --fs-heading: 1.25rem;
+  --fs-display: clamp(1.5rem, 2.2vw, 2.625rem);
+  --fs-timer-lg: clamp(3rem, 4.4vw, 5.25rem);
+  --fs-timer-md: clamp(1.5rem, 1.7vw, 2rem);
+  --fs-heading: 1.375rem;
   --fs-body: 0.9375rem;
-  --fs-label: 0.72rem;
-  --fs-caption: 0.68rem;
+  --fs-label: 0.75rem;
+  --fs-caption: 0.6875rem;
 
-  --dur: 180ms;
+  /* Motion: simple fades only */
+  --dur: 150ms;
   --ease: ease-out;
 }
