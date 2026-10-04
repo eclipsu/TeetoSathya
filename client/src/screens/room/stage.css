@@ -80,7 +80,20 @@
 .buzz-card__who { font-size: 0.875rem; color: var(--text-dim); }
 .buzz-card__wait { font-size: var(--fs-label); color: var(--text-faint); }
 
-.transcript-live { margin: 0; max-width: 72ch; text-align: center; color: var(--text-dim); min-height: 1.5em; }
+.transcript-live {
+  /* Fixed two-line slot: the stage never shifts as words come and go. */
+  margin: 0; width: min(72ch, 100%);
+  height: calc(2 * 1.5em); line-height: 1.5;
+  display: flex; align-items: center; justify-content: center;
+  text-align: center; color: var(--text-dim);
+  opacity: 0; transition: opacity 260ms var(--ease);
+}
+.transcript-live.is-on { opacity: 1; }
+.transcript-live__text {
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2;
+  overflow: hidden; overflow-wrap: anywhere;
+}
+@media (prefers-reduced-motion: reduce) { .transcript-live { transition: none; } }
 .transcript-off { margin: 0; text-align: center; font-size: var(--fs-label); color: var(--warn); }
 
 @media (max-width: 1280px) {
@@ -132,3 +145,10 @@
 .stage__break-title { margin: 0; font-weight: 600; }
 .stage__break-next { margin: 0; font-size: 0.875rem; color: var(--text-dim); font-variant-numeric: tabular-nums; }
 .stage__break-next strong { color: var(--text); font-weight: 600; }
+
+/* Big "Round 2 / 3" above the round clock */
+.stage__roundname { display: inline-flex; align-items: baseline; gap: var(--s2); margin: 0; line-height: 1; font-variant-numeric: tabular-nums; }
+.stage__roundname-label { font-size: 0.875rem; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase; color: var(--text-dim); }
+.stage__roundname-num { font-size: clamp(2rem, 2.6vw, 2.75rem); font-weight: 700; letter-spacing: -0.02em; color: var(--text); }
+.stage__roundname-of { font-size: clamp(1.25rem, 1.6vw, 1.625rem); font-weight: 600; color: var(--text-faint); }
+.stage--challenge .stage__roundname-num { font-size: 1.75rem; }

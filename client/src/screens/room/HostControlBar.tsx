@@ -60,7 +60,16 @@ export function HostControlBar({ snapshot: s, hostCall, onDelete }: Props) {
 
       {s.status === 'live' && (
         <>
-          {g.factCheck ? (
+          {g.factCheck?.status === 'tiebreak' ? (
+            <>
+              <button className="btn btn--sm tiebreak__stands" disabled={busy} onClick={() => run('host:breakTie', { verdict: 'CORRECT' })} title="The jury split: rule that the claim stands">
+                <span className="btn__label">Claim stands</span>
+              </button>
+              <button className="btn btn--sm tiebreak__false" disabled={busy} onClick={() => run('host:breakTie', { verdict: 'INCORRECT' })} title="The jury split: rule that the claim is false">
+                <span className="btn__label">Claim is false</span>
+              </button>
+            </>
+          ) : g.factCheck ? (
             <button className="btn btn--primary btn--sm" disabled={busy || g.factCheck.status === 'checking'} onClick={() => run('factcheck:dismiss')} title={g.factCheck.status === 'checking' ? 'Waiting for the jury' : 'Dismiss / Resume'}>
               <BellIcon width={16} height={16} /> <span className="btn__label">Dismiss fact check</span>
             </button>

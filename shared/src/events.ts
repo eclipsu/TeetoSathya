@@ -64,6 +64,8 @@ export interface ClientToServerEvents {
   'host:finishRound': (p: HostPayload, ack: Ack) => void;
   /** Short (default) or detailed jury explanations. Allowed any time; applies to the next fact check. */
   'host:juryDetail': (p: HostPayload & { detailed: boolean }, ack: Ack) => void;
+  /** The jurors split on a fact check: the host decides whether the claim stands. */
+  'host:breakTie': (p: HostPayload & { verdict: 'CORRECT' | 'INCORRECT' }, ack: Ack) => void;
   /** Break a tied round after it ended: a side, or 'draw'. */
   'host:pickWinner': (p: HostPayload & { winner: TeamIndex | 'draw' }, ack: Ack) => void;
   'host:settings': (p: HostPayload & { turnSeconds: number; roundSeconds: number; totalRounds?: number }, ack: Ack) => void;

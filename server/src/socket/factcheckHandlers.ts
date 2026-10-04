@@ -1,6 +1,6 @@
 import { nanoid } from 'nanoid';
 import type { Room } from '../domain/model';
-import { activeSpeaker, addJuryMessage, beginFactCheckCountdown, canFactCheck, dismissFactCheck, getRecentClaims, mergeClaims, openFactCheck, resolveFactCheck, setConsidering, setJuryPhase, setJuryThinking } from '../domain/factcheck';
+import { activeSpeaker, addJuryMessage, beginFactCheckCountdown, breakTie, canFactCheck, openTiebreak, dismissFactCheck, getRecentClaims, mergeClaims, openFactCheck, resolveFactCheck, setConsidering, setJuryPhase, setJuryThinking } from '../domain/factcheck';
 import { DUMMY_SPEECH, probeClaimExtraction } from '../services/claimExtractor';
 import { runJury } from '../services/factChecking/jury';
 import { speakJurorLine } from '../services/elevenlabsTts';
@@ -88,6 +88,18 @@ export function installFactCheckHandlers(hub: RoomHub) {
       void judge(hub, room.id, challenge.id, challenge.claimId, challenge.claim);
     });
 
+    hub.handle(socket, 'host:breakTie', async (p, ack) => {
+      const room = await hub.requireHost(socket, p?.hostToken);
+      const verdict = p?.verdict;
+      if (verdict !== 'CORRECT' && verdict !== 'INCORRECT') throw new HandlerError('bad_request', 'Pick whether the claim stands.');
+      const out = await hub.store.update(room.id, (r) => ({ room: r, res: breakTie(r, verdict, Date.now()) }));
+      if (!out) throw new HandlerError('room_not_found', 'This room no longer exists.');
+      if (!out.res.ok) throw new HandlerError('invalid_state', out.res.reason);
+      hub.toastRoom(room.id, 'info', verdict === 'CORRECT' ? 'The host ruled: the claim stands.' : 'The host ruled: the claim is false.');
+      ack?.({ ok: true });
+      await hub.changed(out.room);
+    });
+
     hub.handle(socket, 'factcheck:dismiss', async (p, ack) => {
       const room = await hub.requireHost(socket, p?.hostToken);
       const out = await hub.store.update(room.id, (r) => ({ room: r, res: dismissFactCheck(r, Date.now()) }));
@@ -118,7 +130,11 @@ async function judge(hub: RoomHub, roomId: string, challengeId: string, claimId:
   const current = await hub.store.get(roomId);
   // The round is about the opener's first claim: challenges are judged in that context.
   const roundClaim = current?.game.roundClaim?.text;
-  const topic = current ? (roundClaim ? `${current.topic} (this round is about the opening claim: "${roundClaim}")` : current.topic) : '';
+  // The motion is the topic. The round claim is background only: anything about the motion is on-topic,
+  // not just claims about that one opening statement.
+  const topic = current
+    ? (roundClaim ? `${current.topic} (background: this round opened with the claim "${roundClaim}"; any claim about the motion is on-topic)` : current.topic)
+    : '';
   const detailed = current?.settings.juryDetailed ?? false;
   let resolution: { verdict: 'CORRECT' | 'INCORRECT' | 'INCONCLUSIVE'; confidence: number; explanation: string; unavailable?: boolean; jury?: Awaited<ReturnType<typeof runJury>> | null };
   try {
@@ -179,6 +195,16 @@ async function judge(hub: RoomHub, roomId: string, challengeId: string, claimId:
   } catch (err) {
     console.warn('[jury] failed:', safeJuryError(err));
     resolution = { verdict: 'INCONCLUSIVE', confidence: 0, explanation: 'JURY ERROR', unavailable: true, jury: null };
+  }
+  // Split jury: the room argues (hold P) and the host decides; no verdict, no countdown yet.
+  if (resolution.jury && !resolution.jury.verdict && !resolution.unavailable) {
+    const jury = resolution.jury;
+    const split = await hub.store.update(roomId, (room: Room) => ({ room, res: openTiebreak(room, challengeId, jury) }));
+    if (!split?.res) return;
+    const host = split.room.participants.get(split.room.hostSessionId)?.username ?? 'The host';
+    hub.toastRoom(roomId, 'warn', `The jury split. Hold P to argue your case. ${host} decides.`);
+    await hub.changed(split.room);
+    return;
   }
   // The verdict holds the stage for FACT_CHECK_RESUME_MS, then the game timer resumes the clocks.
   const updated = await hub.store.update(roomId, (room: Room) => {

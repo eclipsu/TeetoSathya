@@ -59,6 +59,21 @@ export function RoomScreen({ roomId }: { roomId: string }) {
   });
 
   useGameSounds(snapshot);
+
+  // Jury tie-break: everyone may talk while holding P (or the on-screen button). The AI isn't listening.
+  const tiebreak = snapshot?.status === 'live' && snapshot.game.factCheck?.status === 'tiebreak';
+  const [talking, setTalking] = useState(false);
+  useEffect(() => {
+    if (!tiebreak) { setTalking(false); return; }
+    const typing = (e: KeyboardEvent) => e.target instanceof HTMLElement && (e.target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName));
+    const down = (e: KeyboardEvent) => { if ((e.key === 'p' || e.key === 'P') && !e.repeat && !typing(e)) { e.preventDefault(); setTalking(true); } };
+    const up = (e: KeyboardEvent) => { if (e.key === 'p' || e.key === 'P') setTalking(false); };
+    const blur = () => setTalking(false);
+    window.addEventListener('keydown', down);
+    window.addEventListener('keyup', up);
+    window.addEventListener('blur', blur);
+    return () => { window.removeEventListener('keydown', down); window.removeEventListener('keyup', up); window.removeEventListener('blur', blur); };
+  }, [tiebreak]);
   const speakingLine = useSpokenLines(room.socket);
 
   // Buzz moment: sound for everyone in the room.
@@ -233,7 +248,7 @@ export function RoomScreen({ roomId }: { roomId: string }) {
     { state: 'idle' as const, label: 'Connecting…' };
 
   return (
-    <VoiceProvider roomId={roomId} holdMic={!!snapshot.game.factCheck} ended={snapshot.status === 'ended'} onConnected={() => void room.call('voice:joined')}>
+    <VoiceProvider roomId={roomId} holdMic={!!snapshot.game.factCheck && !(tiebreak && talking)} ended={snapshot.status === 'ended'} onConnected={() => void room.call('voice:joined')}>
       {hostedSpacetimeDatabase ? <HostedRoomSubscription roomId={roomId} /> : null}
       <FloorCapture socket={room.socket} enabled={holdsFloor} />
       <div className="room" data-status={snapshot.status} data-host={isHost}>
@@ -285,7 +300,7 @@ export function RoomScreen({ roomId }: { roomId: string }) {
 
         {snapshot.status === 'ended' ? (
           <main className="room__main room__main--summary">
-            <Summary snapshot={snapshot} isHost={isHost} onPickWinner={(winner) => void hostCall('host:pickWinner', { winner })} />
+            <Summary snapshot={snapshot} isHost={isHost} speakingId={speakingLine} onPickWinner={(winner) => void hostCall('host:pickWinner', { winner })} />
           </main>
         ) : (
           <main className="room__main">
@@ -300,6 +315,13 @@ export function RoomScreen({ roomId }: { roomId: string }) {
               interimText={room.interim && snapshot.game.activeSide !== null && snapshot.game.hotSeat[snapshot.game.activeSide] === room.interim.speakerId ? room.interim.text : null}
               transcriptionAvailable={room.transcriptionAvailable}
               speakingId={speakingLine}
+              tiebreak={{
+                isHost,
+                hostName: snapshot.participants.find((p) => p.isHost)?.username ?? null,
+                onDecide: (verdict) => void hostCall('host:breakTie', { verdict }),
+                talking,
+                onTalk: setTalking,
+              }}
               picker={claimPanel.open ? <ClaimPanel state={claimPanel} onClose={closeClaimPanel} onSubmit={(id) => void submitFactCheck(id)} /> : undefined}
             />
             <FactChat
@@ -312,7 +334,7 @@ export function RoomScreen({ roomId }: { roomId: string }) {
           </main>
         )}
 
-        {(demo.gemini || demo.claude) && (
+        {snapshot.status !== 'ended' && (demo.gemini || demo.claude) && (
           <section className="factcheck-history tile" aria-label="Dummy fact summary">
             <h3>TEMP TEST SUMMARY</h3>
             <p>Gemini: {demo.gemini}</p>

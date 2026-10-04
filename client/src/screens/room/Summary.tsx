@@ -3,6 +3,7 @@ import { Avatar } from '../../components/Avatar';
 import { Confetti } from '../../components/Confetti';
 import { formatClock } from '../../state/clock';
 import { FactChat } from './FactCheck';
+import { JuryReview } from './JuryReview';
 
 function cssVar(name: string): string {
   return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
@@ -17,12 +18,14 @@ function confettiColors(side: TeamIndex): string[] {
 
 interface Props {
   snapshot: RoomSnapshot;
+  /** Review line being read aloud right now. */
+  speakingId?: string | null;
   isHost: boolean;
   onPickWinner: (winner: RoundWinner) => void;
 }
 
 /** End-of-round summary: the winner and score, then who spoke and how much of their talk time they used. */
-export function Summary({ snapshot: s, isHost, onPickWinner }: Props) {
+export function Summary({ snapshot: s, isHost, onPickWinner, speakingId = null }: Props) {
   const budget = s.settings.turnSeconds * 1000;
   const roundUsed = s.settings.roundSeconds * 1000 - (s.game.roundRemainingMs ?? 0);
   const { scores: score, winner } = s.game;
@@ -59,6 +62,7 @@ export function Summary({ snapshot: s, isHost, onPickWinner }: Props) {
         )}
         <p className="summary__rule">A challenge that lands is +100 for the challenger's side. One that fails is −50 for the challenger's side.</p>
       </div>
+      {s.game.review && <JuryReview review={s.game.review} sides={s.sides} speakingId={speakingId} />}
       {s.game.roundLog.length > 0 && (
         <ol className="summary__rounds" aria-label="Rounds">
           {s.game.roundLog.map((r) => (

@@ -275,7 +275,7 @@ Never fabricate sources, URLs, studies, quotations, numbers, events, or evidence
 
 For current or rapidly changing facts, say so and lower confidence.
 
-Return only one JSON object with keys verdict, onTopic, confidence, reasoning, spoken, keyBasis, and limitations.
+Return only one JSON object with keys verdict, onTopic, confidence, reasoning, spoken, sources, keyBasis, and limitations.
 
 Do not provide hidden chain-of-thought. Provide a concise factual rationale.`;
 
@@ -293,5 +293,5 @@ export function deliberationSystem(model: JuryModel): string {
 
 export function claimOnlyUser(claim: string, topic: string, now = new Date()): string {
   const date = now.toISOString().slice(0, 10);
-  return `Today's date is ${date}.\nDebate topic: """${topic}"""\nIf the claim is not about this topic, set onTopic to false and verdict to INCORRECT.\nAlso give "spoken": one short sentence of at most 12 words, said out loud to the room, verdict first. Keep reasoning complete; spoken is the short version.\nEvaluate this exact claim and nothing else:\n"""${claim}"""`;
+  return `Today's date is ${date}.\nDebate topic: """${topic}"""\nIf the claim is not about this topic, set onTopic to false and verdict to INCORRECT.\nAlso give "spoken": one short sentence of at most 12 words, said out loud to the room, verdict first. And "sources": up to 2 well-known sources you rely on, as "Organization, dataset or report, year" (for example "US Census Bureau, Educational Attainment, 2023"). Only name sources you are confident exist; no URLs; never invent titles or numbers; use "General knowledge" if none. Keep reasoning complete; spoken is the short version.\nEvaluate this exact claim and nothing else:\n"""${claim}"""`;
 }

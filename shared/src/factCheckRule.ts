@@ -49,6 +49,8 @@ export function publishingFromSnapshot(
   const me = s.participants.find((p) => p.id === participantId);
   if (!me || me.role !== "speaker") return false;
   if (s.status === "ended") return false;
+  // Jury tie-break: anyone may talk (push-to-talk on the client).
+  if (s.game.factCheck?.status === "tiebreak") return true;
   if (s.status !== "live") return true;
   const g = s.game;
   if (g.paused || g.buzz || g.factCheck || g.activeSide === null) return false;

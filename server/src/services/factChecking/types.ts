@@ -11,6 +11,8 @@ export interface Round1Analysis {
   reasoning: string;
   /** Short line said to the room. The full reasoning still goes to the other juror. */
   spoken: string;
+  /** Up to 3 named sources the juror relied on. */
+  sources: string[];
   keyBasis: string[];
   limitations: string[];
 }

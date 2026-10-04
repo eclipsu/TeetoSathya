@@ -147,7 +147,10 @@ export const openingSideFor = (roundNumber: number): TeamIndex => (roundNumber %
 function beginRound(room: Room, now: number, roundNumber: number, opener: Participant): void {
   const g = room.game;
   const openingSide = opener.team as TeamIndex;
-  for (const p of room.participants.values()) p.timeUsedMs = 0;
+  for (const p of room.participants.values()) {
+    if (p.timeUsedMs > 0) g.talkTotals.set(p.sessionId, (g.talkTotals.get(p.sessionId) ?? 0) + p.timeUsedMs);
+    p.timeUsedMs = 0;
+  }
   g.roundSeq += 1;
   g.roundNumber = roundNumber;
   g.factCheckUsed = new Set();
@@ -188,6 +191,9 @@ export function startRound(room: Room, now: number, openerSessionId?: string): G
   g.factChecks = [];
   g.openedBy = new Set();
   g.roundLog = [];
+  g.talkTotals = new Map();
+  g.review = null;
+  for (const p of room.participants.values()) p.timeUsedMs = 0;
   const chosen = openerSessionId ? room.participants.get(openerSessionId) : undefined;
   const opener = chosen && chosen.role === 'speaker' && chosen.team === 0 ? chosen : openingSpeaker(room);
   if (!opener) return fail(`${room.sides[0]} needs at least one speaker.`);
@@ -258,7 +264,7 @@ function logRound(room: Room, endedBy: RoundEnd, outTeam: TeamIndex | null): voi
 function settleOpenFactCheck(room: Room): void {
   const g = room.game;
   const active = g.factChecks.find((f) => f.id === g.activeFactCheckId);
-  if (active && active.status === 'checking') {
+  if (active && active.status !== 'resolved') {
     active.status = 'resolved';
     active.verdict = 'INCONCLUSIVE';
     active.outcome = 'no_decision';
@@ -530,6 +536,7 @@ export function buzzBlockReason(room: Room, sessionId: string): string | null {
   const g = room.game;
   if (!p) return 'Join the room first.';
   if (p.role !== 'spectator') return 'Only spectators can buzz in.';
+  if (sessionId === room.hostSessionId) return 'The host moderates and does not buzz.';
   if (room.status !== 'live') return 'The round is not live.';
   if (g.activeFactCheckId) return 'A fact check is in progress.';
   if (g.buzz) return 'Someone already buzzed.';

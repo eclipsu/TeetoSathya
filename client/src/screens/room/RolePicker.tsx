@@ -37,12 +37,12 @@ export function RolePicker({ open, snapshot, isHost, required, busy, onPick, onC
         })}
         <button
           className="role-option role-option--spectator"
-          disabled={busy || isHost}
+          disabled={busy}
           onClick={() => onPick('spectator', null)}
         >
           <EyeIcon />
-          <span className="role-option__title">Watch as spectator</span>
-          <span className="role-option__sub">{isHost ? 'The host plays on a team' : 'Listen, and buzz in with SPACE'}</span>
+          <span className="role-option__title">{isHost ? 'Moderate (no team)' : 'Watch as spectator'}</span>
+          <span className="role-option__sub">{isHost ? 'Run the game and break jury ties' : 'Listen, and buzz in with SPACE'}</span>
         </button>
       </div>
     </Modal>
