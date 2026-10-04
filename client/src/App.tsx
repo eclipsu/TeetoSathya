@@ -3,6 +3,7 @@ import { SecureContextBanner } from './components/SecureContextBanner';
 import { ToastProvider } from './components/Toasts';
 import { matchRoom, usePath } from './lib/router';
 import { getSession } from './lib/session';
+import { History } from './screens/History';
 import { Lobby } from './screens/Lobby';
 import { NameEntry } from './screens/NameEntry';
 import { RoomScreen } from './screens/RoomScreen';
@@ -18,7 +19,9 @@ export function App() {
     // Entering a name is also the click that unlocks browser audio autoplay.
     screen = <NameEntry onDone={() => { setHasName(true); setEditingName(false); }} />;
   } else if (roomId) {
-    screen = <RoomScreen roomId={roomId} />;
+    screen = <RoomScreen key={roomId} roomId={roomId} />;
+  } else if (path === '/history') {
+    screen = <History />;
   } else {
     screen = <Lobby onChangeName={() => setEditingName(true)} />;
   }

@@ -1,4 +1,13 @@
-import type { FactCheckOutcome, FactVerdict, JuryPhase, JuryResult, Role, RoomSettings, RoomStatus, TeamIndex } from '@teeto/shared';
+import type {
+  FactCheckOutcome,
+  FactVerdict,
+  JuryPhase,
+  JuryResult,
+  Role,
+  RoomSettings,
+  RoomStatus,
+  TeamIndex,
+} from "@teeto/shared";
 
 export interface Participant {
   /** Public per-room id: broadcast in snapshots and used as the LiveKit identity. */
@@ -65,7 +74,7 @@ export interface FactCheckChallenge {
   speakerTeam: TeamIndex;
   claimId: string;
   claim: string;
-  status: 'checking' | 'resolved';
+  status: "checking" | "resolved";
   verdict: FactVerdict | null;
   confidence: number | null;
   explanation: string | null;
@@ -74,6 +83,8 @@ export interface FactCheckChallenge {
   juryPhase: JuryPhase | null;
   jury: JuryResult | null;
   createdAt: number;
+  /** Set once, when the check resolves. 100, -50, or 0. */
+  scoreDelta: number | null;
 }
 
 export interface GameState {
@@ -98,6 +109,10 @@ export interface GameState {
   activeFactCheckId: string | null;
   /** Session that opened the claim picker. The speaker's mic is already off. */
   factCheckArmedBy: string | null;
+  /** Server time when a finished fact check should resume the clocks. Null while the jury is still working. */
+  factCheckResumeAt: number | null;
+  /** Team A, Team B. Reset at the start of each round. */
+  scores: [number, number];
 }
 
 export interface Room {
@@ -133,5 +148,7 @@ export function initialGameState(turnSeconds: number): GameState {
     factChecks: [],
     activeFactCheckId: null,
     factCheckArmedBy: null,
+    factCheckResumeAt: null,
+    scores: [0, 0],
   };
 }

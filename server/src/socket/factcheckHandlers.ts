@@ -1,6 +1,6 @@
 import { nanoid } from 'nanoid';
 import type { Room } from '../domain/model';
-import { activeSpeaker, armFactCheck, canFactCheck, disarmFactCheck, dismissFactCheck, getRecentClaims, mergeClaims, openFactCheck, resolveFactCheck, setJuryPhase } from '../domain/factcheck';
+import { activeSpeaker, armFactCheck, beginFactCheckCountdown, canFactCheck, disarmFactCheck, dismissFactCheck, getRecentClaims, mergeClaims, openFactCheck, resolveFactCheck, setJuryPhase } from '../domain/factcheck';
 import { DUMMY_SPEECH, probeClaimExtraction } from '../services/claimExtractor';
 import { runJury } from '../services/factChecking/jury';
 import type { Transcription } from '../services/transcription';
@@ -125,8 +125,9 @@ function safeJuryError(err: unknown): string {
 
 async function judge(hub: RoomHub, roomId: string, challengeId: string, claimId: string, claim: string): Promise<void> {
   let resolution: { verdict: 'CORRECT' | 'INCORRECT' | 'INCONCLUSIVE'; confidence: number; explanation: string; unavailable?: boolean; jury?: Awaited<ReturnType<typeof runJury>> | null };
+  const topic = (await hub.store.get(roomId))?.topic ?? '';
   try {
-    const jury = await runJury(claimId, claim, async (phase) => {
+    const jury = await runJury(claimId, claim, topic, async (phase) => {
       try {
         const updated = await hub.store.update(roomId, (room: Room) => ({
           room,
@@ -141,7 +142,7 @@ async function judge(hub: RoomHub, roomId: string, challengeId: string, claimId:
       ? {
         verdict: jury.verdict,
         confidence: jury.juryConfidence,
-        explanation: `${jury.votesForCorrect}–${jury.votesForIncorrect} ${jury.verdict}`,
+        explanation: jury.offTopic ? 'Different and incorrect' : `${jury.votesForCorrect}–${jury.votesForIncorrect} ${jury.verdict}`,
         jury,
       }
       : {
@@ -154,10 +155,11 @@ async function judge(hub: RoomHub, roomId: string, challengeId: string, claimId:
     console.warn('[jury] failed:', safeJuryError(err));
     resolution = { verdict: 'INCONCLUSIVE', confidence: 0, explanation: 'JURY ERROR', unavailable: true, jury: null };
   }
-  const updated = await hub.store.update(roomId, (room: Room) => ({
-    room,
-    res: resolveFactCheck(room, challengeId, resolution),
-  }));
+  const updated = await hub.store.update(roomId, (room: Room) => {
+    const res = resolveFactCheck(room, challengeId, resolution);
+    if (res.ok) beginFactCheckCountdown(room, Date.now());
+    return { room, res };
+  });
   if (!updated?.res.ok) return;
   try {
     await hub.changed(updated.room);

@@ -12,8 +12,8 @@ async function generate(system: string, user: string, signal: AbortSignal): Prom
   }
 }
 
-export async function groqIndependent(claim: string, signal: AbortSignal): Promise<Round1Analysis> {
-  const text = await generate(ROUND1_SYSTEM.groq, claimOnlyUser(claim), signal);
+export async function groqIndependent(claim: string, topic: string, signal: AbortSignal): Promise<Round1Analysis> {
+  const text = await generate(ROUND1_SYSTEM.groq, claimOnlyUser(claim, topic), signal);
   return readRound1('groq', JURY_ROLES.groq, text);
 }
 

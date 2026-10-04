@@ -74,6 +74,7 @@ export function Lobby({ onChangeName }: { onChangeName: () => void }) {
       <main className="lobby">
         <div className="lobby__head">
           <h1>Debate rooms</h1>
+          <button className="btn btn--ghost" onClick={() => navigate('/history')}>Past debates</button>
           {loadError && <span className="pill pill--danger" role="alert">{loadError}</span>}
         </div>
 

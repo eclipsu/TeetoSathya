@@ -48,7 +48,7 @@ export function peerAnalyses(self: Round1Analysis, round1: Round1Analysis[]): Ro
   return round1.filter((analysis) => analysis.model !== self.model);
 }
 
-export function deliberationUser(claim: string, own: Round1Analysis, others: Round1Analysis[]): string {
+export function deliberationUser(claim: string, own: Round1Analysis, others: Round1Analysis[], topic = ''): string {
   const brief = (analysis: Round1Analysis) => ({
     model: analysis.model,
     role: analysis.role,
@@ -59,6 +59,10 @@ export function deliberationUser(claim: string, own: Round1Analysis, others: Rou
     limitations: analysis.limitations,
   });
   return [
+    `Today's date is ${new Date().toISOString().slice(0, 10)}.`,
+    'DEBATE TOPIC:',
+    `"""${topic}"""`,
+    'If the claim is not about that topic, set onTopic to false and finalVerdict to INCORRECT.',
     'ORIGINAL CLAIM:',
     `"""${claim}"""`,
     '',
@@ -106,6 +110,7 @@ function round1ToVote(analysis: Round1Analysis): JuryVote {
     initialVerdict: analysis.verdict,
     initialConfidence: analysis.confidence,
     finalVerdict: analysis.verdict,
+    onTopic: analysis.onTopic,
     finalConfidence: analysis.confidence,
     changedVote: false,
     reasoning: analysis.reasoning,
@@ -114,8 +119,15 @@ function round1ToVote(analysis: Round1Analysis): JuryVote {
   };
 }
 
+/** Off-topic claims are incorrect even if a juror called the unrelated fact true. */
+export function topicVerdict(votes: Pick<JuryVote, 'onTopic'>[], verdict: JuryVote['finalVerdict'] | null): { verdict: JuryVote['finalVerdict'] | null; offTopic: boolean } {
+  const offTopic = votes.length > 0 && votes.every((vote) => !vote.onTopic);
+  if (!offTopic) return { verdict, offTopic: false };
+  return { verdict: 'INCORRECT', offTopic: true };
+}
+
 const SEATS: Record<JuryModel, {
-  independent: (claim: string, signal: AbortSignal) => Promise<Round1Analysis>;
+  independent: (claim: string, topic: string, signal: AbortSignal) => Promise<Round1Analysis>;
   deliberate: (packet: string, own: Round1Analysis, signal: AbortSignal) => Promise<JuryVote>;
 }> = {
   gemini: { independent: geminiIndependent, deliberate: geminiDeliberate },
@@ -129,11 +141,11 @@ const SEATS: Record<JuryModel, {
  * Round 1 in parallel (each seated model sees only the claim), then Round 2 in parallel
  * (each seated model sees the other seated analyses). The tally is not a model call.
  */
-export async function runJury(claimId: string, claim: string, onPhase?: (phase: JuryProgress['phase']) => Promise<void> | void): Promise<JuryResult> {
+export async function runJury(claimId: string, claim: string, topic: string, onPhase?: (phase: JuryProgress['phase']) => Promise<void> | void): Promise<JuryResult> {
   await onPhase?.('independent');
   const settled = await Promise.all(JURY_SEATS.map(async (model) => {
     try {
-      return await attempt(model, (signal) => SEATS[model].independent(claim, signal));
+      return await attempt(model, (signal) => SEATS[model].independent(claim, topic, signal));
     } catch (err) {
       if ((model === 'gemini' || model === 'gemini_skeptic') && geminiBusy(err)) {
         console.warn('[jury] Gemini is unavailable, its vote is left out');
@@ -150,16 +162,19 @@ export async function runJury(claimId: string, claim: string, onPhase?: (phase: 
     : await (async () => {
       await onPhase?.('deliberating');
       return Promise.all(round1.map((own) => {
-        const packet = deliberationUser(claim, own, peerAnalyses(own, round1));
+        const packet = deliberationUser(claim, own, peerAnalyses(own, round1), topic);
         return attempt(`${own.model} deliberation`, (signal) => SEATS[own.model].deliberate(packet, own, signal));
       }));
     })();
 
   const tally = calculateMajority(votes, votes.length);
+  const topicRule = topicVerdict(votes, tally.verdict);
   return {
     claimId,
     claim,
     ...tally,
+    verdict: topicRule.verdict,
+    offTopic: topicRule.offTopic,
     votes,
     completedAt: Date.now(),
   };

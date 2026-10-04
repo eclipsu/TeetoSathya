@@ -20,8 +20,8 @@ async function generate(system: string, user: string, schema: object, signal: Ab
   return text;
 }
 
-export async function claudeIndependent(claim: string, signal: AbortSignal): Promise<Round1Analysis> {
-  const text = await generate(ROUND1_SYSTEM.claude, claimOnlyUser(claim), ROUND1_JSON_SCHEMA, signal);
+export async function claudeIndependent(claim: string, topic: string, signal: AbortSignal): Promise<Round1Analysis> {
+  const text = await generate(ROUND1_SYSTEM.claude, claimOnlyUser(claim, topic), ROUND1_JSON_SCHEMA, signal);
   return readRound1('claude', JURY_ROLES.claude, text);
 }
 

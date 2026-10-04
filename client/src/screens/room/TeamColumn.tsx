@@ -1,5 +1,5 @@
-import type { ParticipantView, RoomSnapshot, TeamIndex } from '@teeto/shared';
-import { SeatSlot } from './SeatSlot';
+import type { ParticipantView, RoomSnapshot, TeamIndex } from "@teeto/shared";
+import { SeatSlot } from "./SeatSlot";
 
 interface TeamColumnProps {
   team: TeamIndex;
@@ -10,18 +10,37 @@ interface TeamColumnProps {
   onHotSeat?: (team: TeamIndex, participantId: string) => void;
 }
 
-export function TeamColumn({ team, snapshot, myId, canTakeSeat, onTakeSeat, onHotSeat }: TeamColumnProps) {
-  const speakers = snapshot.participants.filter((p) => p.role === 'speaker' && p.team === team);
-  const bySeat = new Map<number, ParticipantView>(speakers.map((p) => [p.seatOrder ?? 0, p]));
+export function TeamColumn({
+  team,
+  snapshot,
+  myId,
+  canTakeSeat,
+  onTakeSeat,
+  onHotSeat,
+}: TeamColumnProps) {
+  const speakers = snapshot.participants.filter(
+    (p) => p.role === "speaker" && p.team === team,
+  );
+  const bySeat = new Map<number, ParticipantView>(
+    speakers.map((p) => [p.seatOrder ?? 0, p]),
+  );
   const max = snapshot.settings.speakersPerTeamMax;
   const hot = snapshot.game.hotSeat[team];
 
   return (
-    <section className={`team team--${team}`} aria-label={`Team ${snapshot.sides[team]}`}>
+    <section
+      className={`team team--${team}`}
+      aria-label={`Team ${snapshot.sides[team]}`}
+    >
       <header className="team__head">
-        <span className="team__letter">{team === 0 ? 'A' : 'B'}</span>
+        <span className="team__letter">{team === 0 ? "A" : "B"}</span>
         <h2 className="team__name">{snapshot.sides[team]}</h2>
-        <span className="team__count">{speakers.length}/{max}</span>
+        <span className="team__score" aria-label="Team points">
+          {snapshot.game.scores[team]}
+        </span>
+        <span className="team__count">
+          {speakers.length}/{max}
+        </span>
       </header>
       <ol className="team__seats">
         {Array.from({ length: max }, (_, i) => i + 1).map((seat) => {
@@ -35,7 +54,9 @@ export function TeamColumn({ team, snapshot, myId, canTakeSeat, onTakeSeat, onHo
               isMe={!!p && p.id === myId}
               inHotSeat={!!p && p.id === hot}
               onTake={canTakeSeat ? () => onTakeSeat(team) : undefined}
-              onHotSeat={p && onHotSeat ? () => onHotSeat(team, p.id) : undefined}
+              onHotSeat={
+                p && onHotSeat ? () => onHotSeat(team, p.id) : undefined
+              }
             />
           );
         })}

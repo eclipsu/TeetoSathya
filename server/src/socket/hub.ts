@@ -13,6 +13,7 @@ import {
 import type { RoomStore } from '../store/RoomStore';
 import type { Room } from '../domain/model';
 import { claimIdentity, connectedCount, markDisconnected, releaseIfExpired } from '../domain/identity';
+import { persistRoom } from '../spacetime/archive';
 import { setRole } from '../domain/seats';
 import { fillEmptyHotSeats, hotSeatVacated as vacate } from '../domain/game';
 import { toSnapshot } from '../domain/snapshot';
@@ -118,6 +119,7 @@ export class RoomHub {
   async changed(room: Room) {
     room.lastActiveAt = Date.now();
     this.io.to(room.id).emit('room:state', toSnapshot(room, Date.now()));
+    persistRoom(room);
     for (const hook of this.changeHooks) {
       try {
         await hook(room);

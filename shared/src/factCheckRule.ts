@@ -1,4 +1,4 @@
-import type { Role, RoomSnapshot, RoomStatus, TeamIndex } from './types';
+import type { Role, RoomSnapshot, RoomStatus, TeamIndex } from "./types";
 
 /**
  * Single fact-check eligibility rule, shared by the server (authorization) and the
@@ -23,14 +23,16 @@ export interface FactCheckContext {
 }
 
 export function factCheckBlockReason(ctx: FactCheckContext): string | null {
-  if (ctx.role !== 'speaker' || ctx.team === null) return 'Only opposing teammates can fact-check.';
-  if (ctx.status !== 'live') return 'The round is not live.';
-  if (ctx.alreadyUsed) return 'You already used your fact check this round.';
-  if (ctx.factCheckOpen) return 'A fact check is already in progress.';
-  if (ctx.buzzOpen) return 'A buzz is in progress.';
-  if (ctx.paused) return 'The round is paused.';
-  if (ctx.activeSide === null || !ctx.speakerPresent) return 'Nobody is speaking.';
-  if (ctx.publishing) return 'You are currently speaking.';
+  if (ctx.role !== "speaker" || ctx.team === null)
+    return "Only opposing teammates can fact-check.";
+  if (ctx.status !== "live") return "The round is not live.";
+  if (ctx.alreadyUsed) return "You already used your fact check this round.";
+  if (ctx.factCheckOpen) return "A fact check is already in progress.";
+  if (ctx.buzzOpen) return "A buzz is in progress.";
+  if (ctx.paused) return "The round is paused.";
+  if (ctx.activeSide === null || !ctx.speakerPresent)
+    return "Nobody is speaking.";
+  if (ctx.publishing) return "You are currently speaking.";
   if (ctx.team === ctx.activeSide) return "You can't fact-check your own side.";
   return null;
 }
@@ -40,16 +42,22 @@ export function factCheckBlockReason(ctx: FactCheckContext): string | null {
  * Lobby / ended: speakers may talk. Live: only the active hot seat, and only
  * while the clock is running (pause, buzz, and fact-check all close the mic).
  */
-export function publishingFromSnapshot(s: RoomSnapshot, participantId: string): boolean {
+export function publishingFromSnapshot(
+  s: RoomSnapshot,
+  participantId: string,
+): boolean {
   const me = s.participants.find((p) => p.id === participantId);
-  if (!me || me.role !== 'speaker') return false;
-  if (s.status !== 'live') return true;
+  if (!me || me.role !== "speaker") return false;
+  if (s.status !== "live") return true;
   const g = s.game;
   if (g.paused || g.buzz || g.factCheck || g.activeSide === null) return false;
   return g.hotSeat[g.activeSide] === participantId;
 }
 
-export function factCheckContextFromSnapshot(s: RoomSnapshot, myId: string | null): FactCheckContext {
+export function factCheckContextFromSnapshot(
+  s: RoomSnapshot,
+  myId: string | null,
+): FactCheckContext {
   const me = myId ? s.participants.find((p) => p.id === myId) : undefined;
   const g = s.game;
   const side = g.activeSide;

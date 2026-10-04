@@ -30,4 +30,10 @@ export const config = {
   openaiModel: process.env.OPENAI_MODEL ?? 'gpt-5.5',
   /** Groq production chat model. Override with GROQ_MODEL if the account's id differs. */
   groqModel: process.env.GROQ_MODEL ?? 'llama-3.3-70b-versatile',
+  /** Public Maincloud host. Not a secret. */
+  spacetimeUri: process.env.SPACETIMEDB_URI || 'https://maincloud.spacetimedb.com',
+  /** Public database name from the SpacetimeDB dashboard. Empty disables the hosted connection. */
+  spacetimeDatabase: process.env.SPACETIMEDB_DATABASE ?? '',
+  /** Owner identity token. Server only. Never logged. */
+  spacetimeToken: process.env.SPACETIMEDB_TOKEN ?? '',
 };

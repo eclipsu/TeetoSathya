@@ -1,6 +1,6 @@
 export type TeamIndex = 0 | 1;
-export type RoomStatus = 'lobby' | 'live' | 'ended';
-export type Role = 'speaker' | 'spectator';
+export type RoomStatus = "lobby" | "live" | "ended";
+export type Role = "speaker" | "spectator";
 
 export interface RoomSettings {
   speakersPerTeamMax: number;
@@ -64,24 +64,34 @@ export interface BuzzView {
   challengedParticipantId: string | null;
 }
 
-export type FactVerdict = 'SUPPORTED' | 'CONTRADICTED' | 'INCONCLUSIVE' | 'CORRECT' | 'INCORRECT';
+export type FactVerdict =
+  | "SUPPORTED"
+  | "CONTRADICTED"
+  | "INCONCLUSIVE"
+  | "CORRECT"
+  | "INCORRECT";
 /**
  * Speaker claim contradicted or jury INCORRECT → successful challenge.
  * Speaker claim supported or jury CORRECT → failed challenge.
  * Anything else, including a jury that could not finish → no decision.
  */
-export type FactCheckOutcome = 'successful' | 'failed' | 'no_decision';
+export type FactCheckOutcome = "successful" | "failed" | "no_decision";
 
-export type JuryModel = 'gemini' | 'gemini_skeptic' | 'groq' | 'claude' | 'chatgpt';
-export type JuryBinary = 'CORRECT' | 'INCORRECT';
-export type JuryPhase = 'independent' | 'deliberating';
+export type JuryModel =
+  | "gemini"
+  | "gemini_skeptic"
+  | "groq"
+  | "claude"
+  | "chatgpt";
+export type JuryBinary = "CORRECT" | "INCORRECT";
+export type JuryPhase = "independent" | "deliberating";
 
 /**
  * Gemini evidence uses GEMINI_API_KEY or GEMINI_FACTS_KEY.
  * Claude skeptic uses CLAUDE_API_KEY.
  * Groq is not seated.
  */
-export const JURY_SEATS: readonly JuryModel[] = ['gemini', 'claude'];
+export const JURY_SEATS: readonly JuryModel[] = ["gemini", "claude"];
 
 /** One juror's independent vote and their vote after seeing the other two. */
 export interface JuryVote {
@@ -90,6 +100,8 @@ export interface JuryVote {
   initialVerdict: JuryBinary;
   initialConfidence: number;
   finalVerdict: JuryBinary;
+  /** False when this juror found the claim off the room topic. */
+  onTopic: boolean;
   finalConfidence: number;
   changedVote: boolean;
   reasoning: string;
@@ -108,6 +120,8 @@ export interface JuryResult {
   /** Average confidence of the winning side. A 2–1 split multiplies that by 0.90. */
   juryConfidence: number;
   unanimous: boolean;
+  /** True when every seated juror found the claim off the room topic. The verdict is then INCORRECT. */
+  offTopic: boolean;
   votes: JuryVote[];
   completedAt: number;
 }
@@ -127,7 +141,7 @@ export interface FactCheckView {
   speakerId: string;
   speakerName: string;
   claim: string;
-  status: 'checking' | 'resolved';
+  status: "checking" | "resolved";
   verdict: FactVerdict | null;
   outcome: FactCheckOutcome | null;
   explanation: string | null;
@@ -137,6 +151,8 @@ export interface FactCheckView {
   juryPhase: JuryPhase | null;
   jury: JuryResult | null;
   createdAt: number;
+  /** Points this check added to the challenger's team. Null while it is still running. */
+  scoreDelta: number | null;
 }
 
 export interface GameView {
@@ -151,14 +167,18 @@ export interface GameView {
   roundRemainingMs: number | null;
   paused: boolean;
   buzz: BuzzView | null;
-  /** The fact-check currently holding the floor, if any. Cleared when the host resumes. */
+  /** The fact-check currently holding the floor, if any. Cleared when the 10s countdown ends. */
   factCheck: FactCheckView | null;
+  /** Server time when the clocks resume after a finished fact check. Null until the verdict is in. */
+  factCheckResumeAt: number | null;
   /** Set the moment someone clicks Fact Check, before a claim is chosen. */
   factCheckArmed: { challengerName: string; speakerName: string } | null;
   /** Resolved and in-progress checks for this round, oldest first. */
   factChecks: FactCheckView[];
   /** Public participant ids that have submitted their one fact-check this round. */
   factCheckUsedIds: string[];
+  /** Team A, Team B. Authoritative. Reset when a round starts. */
+  scores: [number, number];
 }
 
 export interface RoomSnapshot {

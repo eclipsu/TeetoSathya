@@ -23,8 +23,8 @@ async function generate(system: string, user: string, schema: object, name: stri
   return text;
 }
 
-export async function chatgptIndependent(claim: string, signal: AbortSignal): Promise<Round1Analysis> {
-  const text = await generate(ROUND1_SYSTEM.chatgpt, claimOnlyUser(claim), ROUND1_JSON_SCHEMA, 'jury_round1', signal);
+export async function chatgptIndependent(claim: string, topic: string, signal: AbortSignal): Promise<Round1Analysis> {
+  const text = await generate(ROUND1_SYSTEM.chatgpt, claimOnlyUser(claim, topic), ROUND1_JSON_SCHEMA, 'jury_round1', signal);
   return readRound1('chatgpt', JURY_ROLES.chatgpt, text);
 }
 

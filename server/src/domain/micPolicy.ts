@@ -1,4 +1,4 @@
-import type { Participant, Room } from './model';
+import type { Participant, Room } from "./model";
 
 /**
  * Who may publish audio right now. Single source of truth for both token minting
@@ -10,9 +10,16 @@ import type { Participant, Room } from './model';
  *   (paused, buzz-locked, or an open fact-check means nobody holds the floor).
  */
 export function canPublish(room: Room, p: Participant): boolean {
-  if (p.role !== 'speaker') return false;
-  if (room.status !== 'live') return true;
+  if (p.role !== "speaker") return false;
+  if (room.status !== "live") return true;
   const g = room.game;
-  if (g.paused || g.buzz || g.activeFactCheckId || g.factCheckArmedBy || g.activeSide === null) return false;
+  if (
+    g.paused ||
+    g.buzz ||
+    g.activeFactCheckId ||
+    g.factCheckArmedBy ||
+    g.activeSide === null
+  )
+    return false;
   return g.hotSeat[g.activeSide] === p.sessionId;
 }

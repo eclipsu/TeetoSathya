@@ -1,12 +1,30 @@
-import { factCheckBlockReason, type FactCheckOutcome, type FactVerdict, type JuryPhase, type JuryResult, type TeamIndex } from '@teeto/shared';
-import type { ExtractedClaim, FactCheckChallenge, Participant, Room, TranscriptSegment } from './model';
-import { canPublish } from './micPolicy';
-import { freezeClocks, unfreezeClocks } from './game';
+import {
+  factCheckBlockReason,
+  type FactCheckOutcome,
+  type FactVerdict,
+  type JuryPhase,
+  type JuryResult,
+  type TeamIndex,
+} from "@teeto/shared";
+import type {
+  ExtractedClaim,
+  FactCheckChallenge,
+  Participant,
+  Room,
+  TranscriptSegment,
+} from "./model";
+import { canPublish } from "./micPolicy";
+import { freezeClocks, unfreezeClocks } from "./game";
 
 const CLAIM_CAP = 200;
 
 export function claimKey(text: string): string {
-  return text.toLowerCase().replace(/[“”]/g, '"').replace(/\s+/g, ' ').trim().replace(/[.?!]+$/g, '');
+  return text
+    .toLowerCase()
+    .replace(/[“”]/g, '"')
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/[.?!]+$/g, "");
 }
 
 /** Hot-seat speaker who currently holds the floor, or null when nobody does. */
@@ -23,9 +41,12 @@ export function activeSpeaker(room: Room): Participant | null {
  * Server authorization for opening or submitting a fact-check.
  * Does not consume the participant's one attempt.
  */
-export function canFactCheck(room: Room, sessionId: string): { ok: true } | { ok: false; reason: string } {
+export function canFactCheck(
+  room: Room,
+  sessionId: string,
+): { ok: true } | { ok: false; reason: string } {
   const p = room.participants.get(sessionId);
-  if (!p) return { ok: false, reason: 'Join the room first.' };
+  if (!p) return { ok: false, reason: "Join the room first." };
   const side = room.game.activeSide;
   const reason = factCheckBlockReason({
     status: room.status,
@@ -35,26 +56,40 @@ export function canFactCheck(room: Room, sessionId: string): { ok: true } | { ok
     publishing: canPublish(room, p),
     paused: room.game.paused && room.game.factCheckArmedBy !== sessionId,
     buzzOpen: room.game.buzz !== null,
-    factCheckOpen: room.game.activeFactCheckId !== null || (room.game.factCheckArmedBy !== null && room.game.factCheckArmedBy !== sessionId),
+    factCheckOpen:
+      room.game.activeFactCheckId !== null ||
+      (room.game.factCheckArmedBy !== null &&
+        room.game.factCheckArmedBy !== sessionId),
     alreadyUsed: room.game.factCheckUsed.has(sessionId),
     speakerPresent: side !== null && !!room.game.hotSeat[side],
   });
   return reason ? { ok: false, reason } : { ok: true };
 }
 
-/** Newest claims first, at most `limit`, for this speaker in the current round only. */
-export function getRecentClaims(room: Room, speakerSessionId: string, limit = 4): ExtractedClaim[] {
-  const mine = room.game.claims.filter((c) => c.speakerSessionId === speakerSessionId && c.roundSeq === room.game.roundSeq);
+/** Newest claims first, at most `limit`, for this speaker in this room and round only. */
+export function getRecentClaims(
+  room: Room,
+  speakerSessionId: string,
+  limit = 4,
+): ExtractedClaim[] {
+  const mine = room.game.claims.filter(
+    (c) =>
+      c.roomId === room.id &&
+      c.speakerSessionId === speakerSessionId &&
+      c.roundSeq === room.game.roundSeq,
+  );
   return mine.slice(-limit).reverse();
 }
 
 export function appendTranscript(room: Room, seg: TranscriptSegment): boolean {
-  if (room.status !== 'live' || seg.roundSeq !== room.game.roundSeq) return false;
+  if (room.status !== "live" || seg.roundSeq !== room.game.roundSeq)
+    return false;
   if (!room.participants.has(seg.speakerSessionId)) return false;
   const text = seg.text.trim();
   if (!text) return false;
   room.game.segments.push({ ...seg, text });
-  if (room.game.segments.length > 400) room.game.segments.splice(0, room.game.segments.length - 400);
+  if (room.game.segments.length > 400)
+    room.game.segments.splice(0, room.game.segments.length - 400);
   return true;
 }
 
@@ -68,15 +103,21 @@ export interface IncomingClaim {
 }
 
 /** Merge new claims into that speaker's history. Skips blanks and duplicates. */
-export function mergeClaims(room: Room, incoming: IncomingClaim[]): ExtractedClaim[] {
-  if (room.status !== 'live') return [];
+export function mergeClaims(
+  room: Room,
+  incoming: IncomingClaim[],
+): ExtractedClaim[] {
+  if (room.status !== "live") return [];
   const added: ExtractedClaim[] = [];
   for (const raw of incoming) {
     const text = raw.text.trim().slice(0, 280);
     if (!text) continue;
     const key = claimKey(text);
     const dup = room.game.claims.some(
-      (c) => c.roundSeq === room.game.roundSeq && c.speakerSessionId === raw.speakerSessionId && claimKey(c.text) === key,
+      (c) =>
+        c.roundSeq === room.game.roundSeq &&
+        c.speakerSessionId === raw.speakerSessionId &&
+        claimKey(c.text) === key,
     );
     if (dup) continue;
     const claim: ExtractedClaim = {
@@ -92,7 +133,8 @@ export function mergeClaims(room: Room, incoming: IncomingClaim[]): ExtractedCla
     room.game.claims.push(claim);
     added.push(claim);
   }
-  if (room.game.claims.length > CLAIM_CAP) room.game.claims.splice(0, room.game.claims.length - CLAIM_CAP);
+  if (room.game.claims.length > CLAIM_CAP)
+    room.game.claims.splice(0, room.game.claims.length - CLAIM_CAP);
   return added;
 }
 
@@ -101,22 +143,39 @@ export type OpenFactCheckResult =
   | { ok: false; reason: string };
 
 /** Stop the speaker's mic as soon as Fact Check is clicked, before a claim is chosen. */
-export function armFactCheck(room: Room, sessionId: string, now: number): { ok: true; speakerName: string; challengerName: string } | { ok: false; reason: string } {
+export function armFactCheck(
+  room: Room,
+  sessionId: string,
+  now: number,
+):
+  | { ok: true; speakerName: string; challengerName: string }
+  | { ok: false; reason: string } {
   const gate = canFactCheck(room, sessionId);
   if (!gate.ok) return gate;
   const speaker = activeSpeaker(room);
   const challenger = room.participants.get(sessionId);
-  if (!speaker || !challenger) return { ok: false, reason: 'Nobody is speaking.' };
+  if (!speaker || !challenger)
+    return { ok: false, reason: "Nobody is speaking." };
   freezeClocks(room, now);
   room.game.factCheckArmedBy = sessionId;
-  return { ok: true, speakerName: speaker.username, challengerName: challenger.username };
+  return {
+    ok: true,
+    speakerName: speaker.username,
+    challengerName: challenger.username,
+  };
 }
 
 /** Picker closed with no challenge. The speaker's mic comes back. */
-export function disarmFactCheck(room: Room, sessionId: string, now: number): void {
-  if (room.game.factCheckArmedBy !== sessionId || room.game.activeFactCheckId) return;
+export function disarmFactCheck(
+  room: Room,
+  sessionId: string,
+  now: number,
+): void {
+  if (room.game.factCheckArmedBy !== sessionId || room.game.activeFactCheckId)
+    return;
   room.game.factCheckArmedBy = null;
-  if (room.status === 'live' && room.game.paused && !room.game.buzz) unfreezeClocks(room, now);
+  if (room.status === "live" && room.game.paused && !room.game.buzz)
+    unfreezeClocks(room, now);
 }
 
 /**
@@ -124,16 +183,29 @@ export function disarmFactCheck(room: Room, sessionId: string, now: number): voi
  * every check passes. Freezes clocks the same way pause/buzz do, and does not
  * switch the floor.
  */
-export function openFactCheck(room: Room, challengerSessionId: string, claimId: string, now: number, id: string): OpenFactCheckResult {
+export function openFactCheck(
+  room: Room,
+  challengerSessionId: string,
+  claimId: string,
+  now: number,
+  id: string,
+): OpenFactCheckResult {
   const gate = canFactCheck(room, challengerSessionId);
   if (!gate.ok) return gate;
   const speaker = activeSpeaker(room);
-  if (!speaker || speaker.team === null) return { ok: false, reason: 'Nobody is speaking.' };
+  if (!speaker || speaker.team === null)
+    return { ok: false, reason: "Nobody is speaking." };
   const claim = room.game.claims.find((c) => c.id === claimId);
-  if (!claim || claim.roundSeq !== room.game.roundSeq) return { ok: false, reason: 'That claim is not from this round.' };
-  if (claim.speakerSessionId !== speaker.sessionId) return { ok: false, reason: 'That claim is not from the speaker who has the floor.' };
+  if (!claim || claim.roomId !== room.id || claim.roundSeq !== room.game.roundSeq)
+    return { ok: false, reason: "That claim is not from this room." };
+  if (claim.speakerSessionId !== speaker.sessionId)
+    return {
+      ok: false,
+      reason: "That claim is not from the speaker who has the floor.",
+    };
   const challenger = room.participants.get(challengerSessionId);
-  if (!challenger || challenger.team === null) return { ok: false, reason: 'Join the room first.' };
+  if (!challenger || challenger.team === null)
+    return { ok: false, reason: "Join the room first." };
 
   room.game.factCheckUsed.add(challengerSessionId);
   room.game.factCheckArmedBy = null;
@@ -151,15 +223,16 @@ export function openFactCheck(room: Room, challengerSessionId: string, claimId: 
     speakerTeam: speaker.team,
     claimId: claim.id,
     claim: claim.text,
-    status: 'checking',
+    status: "checking",
     verdict: null,
     confidence: null,
     explanation: null,
     unavailable: false,
     outcome: null,
-    juryPhase: 'independent',
+    juryPhase: "independent",
     jury: null,
     createdAt: now,
+    scoreDelta: null,
   };
   room.game.factChecks.push(challenge);
   room.game.activeFactCheckId = id;
@@ -175,20 +248,31 @@ export interface FactCheckResolution {
 }
 
 /** CORRECT/SUPPORTED means the speaker's claim stood. INCORRECT/CONTRADICTED means the challenge landed. */
-export function outcomeForVerdict(verdict: FactVerdict, unavailable = false): FactCheckOutcome {
-  if (unavailable) return 'no_decision';
-  if (verdict === 'INCORRECT' || verdict === 'CONTRADICTED') return 'successful';
-  if (verdict === 'CORRECT' || verdict === 'SUPPORTED') return 'failed';
-  return 'no_decision';
+export function outcomeForVerdict(
+  verdict: FactVerdict,
+  unavailable = false,
+): FactCheckOutcome {
+  if (unavailable) return "no_decision";
+  if (verdict === "INCORRECT" || verdict === "CONTRADICTED")
+    return "successful";
+  if (verdict === "CORRECT" || verdict === "SUPPORTED") return "failed";
+  return "no_decision";
 }
 
 /** Fill in a check that is still running. Ignores late results after it already resolved. */
-export function resolveFactCheck(room: Room, challengeId: string, result: FactCheckResolution): { ok: true; challenge: FactCheckChallenge } | { ok: false; reason: string } {
+export function resolveFactCheck(
+  room: Room,
+  challengeId: string,
+  result: FactCheckResolution,
+): { ok: true; challenge: FactCheckChallenge } | { ok: false; reason: string } {
   const challenge = room.game.factChecks.find((f) => f.id === challengeId);
-  if (!challenge) return { ok: false, reason: 'That fact check no longer exists.' };
-  if (challenge.status !== 'checking') return { ok: false, reason: 'That fact check already finished.' };
-  if (challenge.roundSeq !== room.game.roundSeq && room.status === 'live') return { ok: false, reason: 'That fact check was from another round.' };
-  challenge.status = 'resolved';
+  if (!challenge)
+    return { ok: false, reason: "That fact check no longer exists." };
+  if (challenge.status !== "checking")
+    return { ok: false, reason: "That fact check already finished." };
+  if (challenge.roundSeq !== room.game.roundSeq && room.status === "live")
+    return { ok: false, reason: "That fact check was from another round." };
+  challenge.status = "resolved";
   challenge.verdict = result.verdict;
   challenge.confidence = result.confidence;
   challenge.explanation = result.explanation;
@@ -196,31 +280,66 @@ export function resolveFactCheck(room: Room, challengeId: string, result: FactCh
   challenge.jury = result.jury ?? null;
   challenge.juryPhase = null;
   challenge.outcome = outcomeForVerdict(result.verdict, !!result.unavailable);
+  const delta =
+    challenge.outcome === "successful"
+      ? 100
+      : challenge.outcome === "failed"
+        ? -50
+        : 0;
+  challenge.scoreDelta = delta;
+  room.game.scores[challenge.challengerTeam] += delta;
+  room.game.factCheckResumeAt = null;
   return { ok: true, challenge };
 }
 
+/** Verdict is on screen. Clocks stay frozen until this moment, then resume on their own. */
+export const FACT_CHECK_RESUME_MS = 10_000;
+
+export function beginFactCheckCountdown(room: Room, now: number): void {
+  const challenge = room.game.factChecks.find((f) => f.id === room.game.activeFactCheckId);
+  if (!challenge || challenge.status !== "resolved") return;
+  room.game.factCheckResumeAt = now + FACT_CHECK_RESUME_MS;
+}
+
 /** Progress only. Does not resolve the check or touch the clocks. */
-export function setJuryPhase(room: Room, challengeId: string, phase: JuryPhase): boolean {
+export function setJuryPhase(
+  room: Room,
+  challengeId: string,
+  phase: JuryPhase,
+): boolean {
   const challenge = room.game.factChecks.find((f) => f.id === challengeId);
-  if (!challenge || challenge.status !== 'checking') return false;
+  if (!challenge || challenge.status !== "checking") return false;
   challenge.juryPhase = phase;
   return true;
 }
 
 /** Host resumes. Refuses while the referee is still working, so the room can read the verdict. */
-export function dismissFactCheck(room: Room, now: number): { ok: true } | { ok: false; message: string } {
-  if (room.status !== 'live' || !room.game.activeFactCheckId) return { ok: false, message: 'There is no fact check to dismiss.' };
-  const challenge = room.game.factChecks.find((f) => f.id === room.game.activeFactCheckId);
-  if (challenge?.status === 'checking') return { ok: false, message: 'The fact check is still running.' };
+export function dismissFactCheck(
+  room: Room,
+  now: number,
+): { ok: true } | { ok: false; message: string } {
+  if (room.status !== "live" || !room.game.activeFactCheckId)
+    return { ok: false, message: "There is no fact check to dismiss." };
+  const challenge = room.game.factChecks.find(
+    (f) => f.id === room.game.activeFactCheckId,
+  );
+  if (challenge?.status === "checking")
+    return { ok: false, message: "The fact check is still running." };
+  room.game.factCheckResumeAt = null;
   room.game.activeFactCheckId = null;
   unfreezeClocks(room, now);
   return { ok: true };
 }
 
 /** Model said SUPPORTED/CONTRADICTED but was not confident enough: treat as no decision. */
-export function coerceVerdict(verdict: string, confidence: number): FactVerdict | null {
+export function coerceVerdict(
+  verdict: string,
+  confidence: number,
+): FactVerdict | null {
   const v = verdict.trim().toUpperCase();
-  if (v !== 'SUPPORTED' && v !== 'CONTRADICTED' && v !== 'INCONCLUSIVE') return null;
-  if ((v === 'SUPPORTED' || v === 'CONTRADICTED') && !(confidence >= 0.8)) return 'INCONCLUSIVE';
+  if (v !== "SUPPORTED" && v !== "CONTRADICTED" && v !== "INCONCLUSIVE")
+    return null;
+  if ((v === "SUPPORTED" || v === "CONTRADICTED") && !(confidence >= 0.8))
+    return "INCONCLUSIVE";
   return v;
 }

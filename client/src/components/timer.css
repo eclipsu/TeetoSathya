@@ -1,5 +1,16 @@
-.timer { display: flex; flex-direction: column; align-items: center; gap: 2px; }
-.timer__label { font-size: 0.7rem; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; color: var(--text-faint); }
+.timer {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+.timer__label {
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
 .timer__digits {
   font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
@@ -7,14 +18,41 @@
   letter-spacing: -0.02em;
   line-height: 1;
   color: var(--text);
-  transition: color var(--dur), text-shadow var(--dur);
+  transition:
+    color var(--dur),
+    text-shadow var(--dur);
 }
-.timer--lg .timer__digits { font-size: clamp(2.6rem, 5vw, 4.2rem); }
-.timer--md .timer__digits { font-size: clamp(2rem, 3.6vw, 3rem); }
-.timer--sm .timer__digits { font-size: 1.4rem; }
-.timer.is-stopped .timer__digits { color: var(--text-dim); }
-.timer--warn .timer__digits { color: var(--warn); text-shadow: 0 0 18px rgba(251, 191, 36, 0.35); }
-.timer--danger .timer__digits { color: #f87171; text-shadow: 0 0 22px rgba(239, 68, 68, 0.5); }
-.timer--danger.is-running .timer__digits { animation: timer-pulse 1s ease-in-out infinite; }
-@keyframes timer-pulse { 50% { transform: scale(1.06); opacity: 0.8; } }
-@media (prefers-reduced-motion: reduce) { .timer--danger.is-running .timer__digits { animation: none; } }
+.timer--lg .timer__digits {
+  font-size: clamp(2.6rem, 5vw, 4.2rem);
+}
+.timer--md .timer__digits {
+  font-size: clamp(2rem, 3.6vw, 3rem);
+}
+.timer--sm .timer__digits {
+  font-size: 1.4rem;
+}
+.timer.is-stopped .timer__digits {
+  color: var(--text-dim);
+}
+.timer--warn .timer__digits {
+  color: var(--warn);
+  text-shadow: 0 0 18px rgba(251, 191, 36, 0.35);
+}
+.timer--danger .timer__digits {
+  color: #f87171;
+  text-shadow: 0 0 22px rgba(239, 68, 68, 0.5);
+}
+.timer--danger.is-running .timer__digits {
+  animation: timer-pulse 1s ease-in-out infinite;
+}
+@keyframes timer-pulse {
+  50% {
+    transform: scale(1.06);
+    opacity: 0.8;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .timer--danger.is-running .timer__digits {
+    animation: none;
+  }
+}
