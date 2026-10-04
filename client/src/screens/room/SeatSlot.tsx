@@ -8,6 +8,8 @@ interface SeatSlotProps {
   participant: ParticipantView | undefined;
   isMe: boolean;
   inHotSeat: boolean;
+  /** Has the claim picker open: about to challenge the speaker. */
+  considering?: boolean;
   /** Present when the viewer may take this open seat. */
   onTake?: () => void;
   /** Present for the host while live: put this speaker in the hot seat. */
@@ -34,7 +36,7 @@ function EmptySeat({ seat, onTake }: SeatSlotProps) {
   );
 }
 
-function FilledSeat({ team, participant: p, isMe, inHotSeat, onHotSeat }: SeatSlotProps & { participant: ParticipantView }) {
+function FilledSeat({ team, participant: p, isMe, inHotSeat, considering, onHotSeat }: SeatSlotProps & { participant: ParticipantView }) {
   const { speaking, level } = useSpeaking(p.id);
   return (
     <li
@@ -42,7 +44,7 @@ function FilledSeat({ team, participant: p, isMe, inHotSeat, onHotSeat }: SeatSl
       data-participant={p.id}
       style={levelStyle(level)}
     >
-      <Avatar name={p.username} size={40} speaking={speaking} />
+      <Avatar name={p.username} size={36} speaking={speaking} />
       <div className="seat__info">
         <span className="seat__name">
           {p.username}
@@ -50,8 +52,8 @@ function FilledSeat({ team, participant: p, isMe, inHotSeat, onHotSeat }: SeatSl
         </span>
         <span className="seat__sub">
           {p.isHost && <span className="tag tag--host">Host</span>}
-          {inHotSeat && <span className="tag tag--hot">Hot seat</span>}
-          {!p.connected && <span className="tag tag--away">Reconnecting…</span>}
+          <span className={`seat__status ${inHotSeat ? 'seat__status--hot' : ''}`}><span className="dot" />{!p.connected ? 'Reconnecting…' : inHotSeat ? 'Hot seat' : 'Ready'}</span>
+          {considering && p.connected && <span className="considering">Considering a challenge</span>}
         </span>
       </div>
       <span className="speak-dot" aria-hidden="true" />

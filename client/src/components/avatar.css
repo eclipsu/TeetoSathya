@@ -4,31 +4,23 @@
   place-items: center;
   flex: none;
   border-radius: 50%;
-  isolation: isolate;
+  color: #fff;
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: 0.01em;
+  user-select: none;
 }
-.avatar svg { display: block; border-radius: 50%; }
 
-/* Speaking ring: glow scales with --level (0-1), set by useSpeaking on an ancestor. */
+/* Speaking ring: 2px solid in the team color (--ring-color from an ancestor).
+   --level (0-1) picks quiet / normal / loud via opacity. No glow, no scale. */
 .avatar::after {
   content: '';
   position: absolute;
   inset: -4px;
   border-radius: 50%;
-  border: 2px solid var(--glow-color, var(--avatar-accent));
+  border: 2px solid var(--ring-color, var(--text-dim));
   opacity: 0;
-  transform: scale(0.96);
-  transition: opacity var(--dur) var(--ease-out), transform var(--dur) var(--ease-out);
+  transition: opacity 100ms linear;
   pointer-events: none;
 }
-.avatar--speaking::after {
-  opacity: calc(0.45 + var(--level, 0.5) * 0.55);
-  transform: scale(calc(1 + var(--level, 0.5) * 0.08));
-  box-shadow: 0 0 calc(6px + var(--level, 0.5) * 22px) var(--glow-color, var(--avatar-accent));
-  animation: avatar-pulse 1.6s ease-in-out infinite;
-}
-@keyframes avatar-pulse {
-  50% { border-width: 3px; }
-}
-@media (prefers-reduced-motion: reduce) {
-  .avatar--speaking::after { animation: none; }
-}
+.avatar--speaking::after { opacity: calc(0.35 + min(var(--level, 0.5) * 1.3, 0.65)); }

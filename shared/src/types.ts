@@ -112,6 +112,20 @@ export interface JuryResult {
   completedAt: number;
 }
 
+/** One line in the jurors' live conversation, appended as each model answers. */
+export interface JuryMessage {
+  id: string;
+  model: JuryModel;
+  /** 'opening' = independent read of the claim; 'reply' = answer after reading the other juror. */
+  stage: 'opening' | 'reply';
+  verdict: JuryBinary;
+  confidence: number;
+  text: string;
+  /** Reply only: the juror switched sides after reading the other one. */
+  changedVote: boolean;
+  at: number;
+}
+
 /** One challengeable claim offered to the challenger. Not a fact-check result. */
 export interface ClaimOption {
   id: string;
@@ -136,10 +150,16 @@ export interface FactCheckView {
   /** Set while the jury is running. Null once the check has a result. */
   juryPhase: JuryPhase | null;
   jury: JuryResult | null;
+  /** The jurors' conversation so far, oldest first. */
+  thread: JuryMessage[];
+  /** Jurors still writing their next message. Empty once the check resolves. */
+  thinking: JuryModel[];
   createdAt: number;
 }
 
 export interface GameView {
+  /** 1-based round number; 0 before the first round starts. */
+  round: number;
   /** Participant ids in the hot seat per team. */
   hotSeat: [string | null, string | null];
   activeSide: TeamIndex | null;
@@ -153,12 +173,16 @@ export interface GameView {
   buzz: BuzzView | null;
   /** The fact-check currently holding the floor, if any. Cleared when the host resumes. */
   factCheck: FactCheckView | null;
-  /** Set the moment someone clicks Fact Check, before a claim is chosen. */
-  factCheckArmed: { challengerName: string; speakerName: string } | null;
   /** Resolved and in-progress checks for this round, oldest first. */
   factChecks: FactCheckView[];
   /** Public participant ids that have submitted their one fact-check this round. */
   factCheckUsedIds: string[];
+  /** Public participant ids with the claim picker open. The round keeps going. */
+  consideringIds: string[];
+  /** Fact-check points per team this round. */
+  score: [number, number];
+  /** Set once the round has ended and a winner is known. Null while live, or on a tie until the host picks. */
+  winner: import('./score').RoundWinner | null;
 }
 
 export interface RoomSnapshot {

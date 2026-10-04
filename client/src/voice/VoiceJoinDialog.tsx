@@ -56,7 +56,7 @@ export function VoiceJoinDialog({ open, isSpeaker, onJoin, onClose }: Props) {
             <p className="muted">
               Speakers talk one at a time: when the round is live, your mic only opens while you hold the hot seat and it's your turn.
             </p>
-            <div className="voice-test glass">
+            <div className="voice-test tile">
               <MicIcon />
               <LevelMeter level={level} segments={16} />
               {!track && (

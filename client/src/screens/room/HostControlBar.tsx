@@ -28,8 +28,8 @@ export function HostControlBar({ snapshot: s, hostCall, onDelete }: Props) {
   };
 
   return (
-    <div className="host-bar" role="toolbar" aria-label="Host controls">
-      <span className="host-bar__title">Host</span>
+    <div className="host-bar tile" role="toolbar" aria-label="Host controls">
+      <span className="host-bar__title label">Host</span>
 
       {s.status === 'lobby' && (
         <>
@@ -47,21 +47,18 @@ export function HostControlBar({ snapshot: s, hostCall, onDelete }: Props) {
               {ROUND_OPTIONS.map((v) => <option key={v} value={v}>{fmt(v)}</option>)}
             </select>
           </label>
-          <button className="btn btn--primary btn--sm" disabled={busy} onClick={() => run('host:startRound')} title="Start round">
-            <PlayIcon width={16} height={16} /> <span className="btn__label">Start round</span>
-          </button>
         </>
       )}
 
       {s.status === 'live' && (
         <>
           {g.factCheck ? (
-            <button className="btn btn--sm btn--buzz" disabled={busy || g.factCheck.status === 'checking'} onClick={() => run('factcheck:dismiss')} title={g.factCheck.status === 'checking' ? 'Waiting for the jury' : 'Dismiss / Resume'}>
-              <BellIcon width={16} height={16} /> <span className="btn__label">Dismiss / Resume</span>
+            <button className="btn btn--primary btn--sm" disabled={busy || g.factCheck.status === 'checking'} onClick={() => run('factcheck:dismiss')} title={g.factCheck.status === 'checking' ? 'Waiting for the jury' : 'Dismiss / Resume'}>
+              <BellIcon width={16} height={16} /> <span className="btn__label">Dismiss fact check</span>
             </button>
           ) : g.buzz ? (
-            <button className="btn btn--sm btn--buzz" disabled={busy} onClick={() => run('buzz:dismiss')} title="Dismiss / Resume">
-              <BellIcon width={16} height={16} /> <span className="btn__label">Dismiss / Resume</span>
+            <button className="btn btn--primary btn--sm" disabled={busy} onClick={() => run('buzz:dismiss')} title="Dismiss / Resume">
+              <BellIcon width={16} height={16} /> <span className="btn__label">Dismiss buzz</span>
             </button>
           ) : g.paused ? (
             <button className="btn btn--primary btn--sm" disabled={busy} onClick={() => run('host:resume')} title="Resume">
@@ -77,7 +74,7 @@ export function HostControlBar({ snapshot: s, hostCall, onDelete }: Props) {
           </button>
           {([0, 1] as const).map((side) => (
             <button key={side} className={`btn btn--sm host-bar__rotate host-bar__rotate--${side}`} disabled={busy || !!g.factCheck} onClick={() => run('host:rotateSpeaker', { side })} title={`Swap ${s.sides[side]}'s hot-seat speaker for the next teammate`}>
-              <RotateIcon width={16} height={16} /> <span className="btn__label">Rotate {s.sides[side]}</span>
+              <RotateIcon width={16} height={16} /> <span className={`dot dot--${side === 0 ? 'a' : 'b'}`} /> <span className="btn__label">Rotate {s.sides[side]}</span>
             </button>
           ))}
           <button className="btn btn--sm" disabled={busy} onClick={() => setConfirm('end')} title="End round">

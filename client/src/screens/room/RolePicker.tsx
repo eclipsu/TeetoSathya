@@ -29,7 +29,7 @@ export function RolePicker({ open, snapshot, isHost, required, busy, onPick, onC
               disabled={busy || full}
               onClick={() => onPick('speaker', t)}
             >
-              <MicIcon />
+              <span className="role-option__icon"><span className={`dot dot--${t === 0 ? 'a' : 'b'}`} /><MicIcon /></span>
               <span className="role-option__title">Speak for {snapshot.sides[t]}</span>
               <span className="role-option__sub">{full ? 'Team full' : `${count(t)}/${max} seats taken`}</span>
             </button>

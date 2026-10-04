@@ -1,5 +1,5 @@
 import type { SpaceAction } from '../../state/rules';
-import { BellIcon, CheckIcon } from '../../components/icons';
+import { BellIcon, CheckIcon, LockIcon } from '../../components/icons';
 
 interface Props {
   action: SpaceAction;
@@ -13,13 +13,13 @@ export function KeyHintBar({ action, isSpectator, onPress }: Props) {
   // Spectators get the big touch target; the active speaker's I'm-done button lives on their card.
   const showButton = isSpectator;
   return (
-    <div className={`keyhint ${enabled ? 'is-on' : 'is-off'} ${action.action === 'done' ? 'keyhint--done' : ''}`}>
-      <span className="keyhint__key"><kbd>SPACE</kbd>{action.label && <> = {action.label}</>}</span>
+    <div className={`keyhint tile ${enabled ? 'is-on' : 'is-off'} ${action.action === 'done' ? 'keyhint--done' : ''}`}>
+      <span className="keyhint__key">{!enabled && <LockIcon className="keyhint__lock" />}<kbd>SPACE</kbd>{action.label && <span>= {action.label}</span>}</span>
       {!enabled && 'reason' in action && <span className="keyhint__reason">{action.reason}</span>}
       {showButton && (
         <button className={`buzz-btn ${action.action === 'done' ? 'buzz-btn--done' : ''}`} onClick={onPress} disabled={!enabled}>
-          {action.action === 'done' ? <CheckIcon /> : <BellIcon />}
-          {action.action === 'done' ? "I'M DONE" : 'BUZZ'}
+          {!enabled ? <LockIcon /> : action.action === 'done' ? <CheckIcon /> : <BellIcon />}
+          {action.action === 'done' ? "I'm done" : 'Buzz'}
         </button>
       )}
     </div>

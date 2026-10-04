@@ -6,7 +6,7 @@ export function micClosedReason(s: RoomSnapshot, myId: string | null): string | 
   if (!me || me.role !== 'speaker') return 'Spectators listen only';
   if (s.status !== 'live') return null;
   const g = s.game;
-  if (g.factCheck || g.factCheckArmed) return 'Fact check — mic off';
+  if (g.factCheck) return 'Fact check — mic off';
   if (g.buzz) return 'Buzz in progress';
   if (g.paused) return 'Round paused';
   const mySide = g.hotSeat.indexOf(me.id);
@@ -32,7 +32,6 @@ export function spaceAction(s: RoomSnapshot, myId: string | null): SpaceAction {
   if (me.role === null) return { action: null, label, reason: 'Pick a role first' };
   if (s.status === 'lobby') return { action: null, label, reason: 'Round not live yet' };
   if (s.status === 'ended') return { action: null, label, reason: 'Round over' };
-  if (g.factCheckArmed) return { action: null, label, reason: `${g.factCheckArmed.challengerName} called a fact check. ${g.factCheckArmed.speakerName}, your mic is off.` };
   if (g.factCheck) return { action: null, label, reason: `${g.factCheck.challengerName} called a fact check. ${g.factCheck.speakerName}, your mic is off.` };
   if (g.buzz) return { action: null, label, reason: `${g.buzz.username} buzzed in. Waiting for the host` };
   if (g.paused) return { action: null, label, reason: 'Round paused' };

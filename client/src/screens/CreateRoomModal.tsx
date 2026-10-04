@@ -16,20 +16,14 @@ const PRESETS: { label: string; topic: string; sides: [string, string] }[] = [
   { label: 'Mountains vs Beach', topic: 'Better vacation?', sides: ['Mountains', 'Beach'] },
 ];
 
-const TURN_OPTIONS = [30, 60, 90, 120, 180, 300];
-const ROUND_OPTIONS = [300, 600, 900, 1200, 1800];
-
-function fmt(seconds: number) {
-  return seconds < 60 ? `${seconds}s` : seconds % 60 ? `${Math.floor(seconds / 60)}m ${seconds % 60}s` : `${seconds / 60} min`;
-}
-
 export function CreateRoomModal({ open, onClose, onCreated }: { open: boolean; onClose: () => void; onCreated: (roomId: string) => void }) {
   const toast = useToast();
   const [topic, setTopic] = useState('');
   const [sideA, setSideA] = useState('');
   const [sideB, setSideB] = useState('');
-  const [turnSeconds, setTurn] = useState<number>(LIMITS.turnSecondsDefault);
-  const [roundSeconds, setRound] = useState<number>(LIMITS.roundSecondsDefault);
+  // Clocks start at the defaults; the host can change them from the room before starting.
+  const turnSeconds = LIMITS.turnSecondsDefault;
+  const roundSeconds = LIMITS.roundSecondsDefault;
   const [busy, setBusy] = useState(false);
   const [errors, setErrors] = useState<string[]>([]);
 
@@ -55,54 +49,48 @@ export function CreateRoomModal({ open, onClose, onCreated }: { open: boolean; o
   return (
     <Modal open={open} onClose={onClose} title="Create a debate room" sheet>
       <form onSubmit={submit} className="stack" noValidate>
-        <div className="chips" role="group" aria-label="Topic presets">
-          {PRESETS.map((p) => (
-            <button
-              type="button"
-              key={p.topic}
-              className="chip"
-              onClick={() => {
-                setTopic(p.topic);
-                setSideA(p.sides[0]);
-                setSideB(p.sides[1]);
-              }}
-            >
-              {p.label}
-            </button>
-          ))}
-        </div>
+        <p className="muted modal__lead">Use a clear question and concise labels for both sides.</p>
 
         <label className="field">
           <span className="field__label">
             Topic <span className="field__count">{topic.trim().length}/{LIMITS.topicMax}</span>
           </span>
-          <input className="input" value={topic} maxLength={LIMITS.topicMax} onChange={(e) => setTopic(e.target.value)} placeholder="What's the question?" data-autofocus />
+          <input className="input" value={topic} maxLength={LIMITS.topicMax} onChange={(e) => setTopic(e.target.value)} placeholder="Is remote work better than office work?" data-autofocus />
         </label>
 
         <div className="grid-2">
           <label className="field">
-            <span className="field__label"><span className="dot dot--a" /> Side A</span>
-            <input className="input input--a" value={sideA} maxLength={LIMITS.sideMax} onChange={(e) => setSideA(e.target.value)} placeholder="e.g. Cats" />
+            <span className="field__label">Side A</span>
+            <span className="input-dot"><span className="dot dot--a" aria-hidden="true" /><input className="input" value={sideA} maxLength={LIMITS.sideMax} onChange={(e) => setSideA(e.target.value)} placeholder="e.g. Cats" /></span>
           </label>
           <label className="field">
-            <span className="field__label"><span className="dot dot--b" /> Side B</span>
-            <input className="input input--b" value={sideB} maxLength={LIMITS.sideMax} onChange={(e) => setSideB(e.target.value)} placeholder="e.g. Dogs" />
+            <span className="field__label">Side B</span>
+            <span className="input-dot"><span className="dot dot--b" aria-hidden="true" /><input className="input" value={sideB} maxLength={LIMITS.sideMax} onChange={(e) => setSideB(e.target.value)} placeholder="e.g. Dogs" /></span>
           </label>
         </div>
 
-        <div className="grid-2">
-          <label className="field">
-            <span className="field__label">Talk time per speaker</span>
-            <select className="input" value={turnSeconds} onChange={(e) => setTurn(Number(e.target.value))}>
-              {TURN_OPTIONS.map((s) => <option key={s} value={s}>{fmt(s)}</option>)}
-            </select>
-          </label>
-          <label className="field">
-            <span className="field__label">Round length</span>
-            <select className="input" value={roundSeconds} onChange={(e) => setRound(Number(e.target.value))}>
-              {ROUND_OPTIONS.map((s) => <option key={s} value={s}>{fmt(s)}</option>)}
-            </select>
-          </label>
+        <div className="field">
+          <span className="field__label" id="presets-label">Presets</span>
+          <div className="chips" role="group" aria-labelledby="presets-label">
+            {PRESETS.map((p) => {
+              const active = topic === p.topic && sideA === p.sides[0] && sideB === p.sides[1];
+              return (
+                <button
+                  type="button"
+                  key={p.topic}
+                  className={`chip chip--preset ${active ? 'is-active' : ''}`}
+                  aria-pressed={active}
+                  onClick={() => {
+                    setTopic(p.topic);
+                    setSideA(p.sides[0]);
+                    setSideB(p.sides[1]);
+                  }}
+                >
+                  {p.sides[0]} vs {p.sides[1]}
+                </button>
+              );
+            })}
+          </div>
         </div>
 
         {errors.length > 0 && (

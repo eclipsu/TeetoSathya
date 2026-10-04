@@ -57,7 +57,7 @@ export function Modal({ open, onClose, title, children, sheet = false, dismissib
             <h2 id="modal-title" tabIndex={-1}>{title}</h2>
             {dismissible && (
               <button className="icon-btn" onClick={onClose} aria-label="Close">
-                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
                   <path d="M6 6l12 12M18 6L6 18" />
                 </svg>
               </button>

@@ -1,4 +1,4 @@
-import type { FactCheckOutcome, FactVerdict, JuryPhase, JuryResult, Role, RoomSettings, RoomStatus, TeamIndex } from '@teeto/shared';
+import type { RoundWinner, FactCheckOutcome, FactVerdict, JuryMessage, JuryModel, JuryPhase, JuryResult, Role, RoomSettings, RoomStatus, TeamIndex } from '@teeto/shared';
 
 export interface Participant {
   /** Public per-room id: broadcast in snapshots and used as the LiveKit identity. */
@@ -73,6 +73,8 @@ export interface FactCheckChallenge {
   outcome: FactCheckOutcome | null;
   juryPhase: JuryPhase | null;
   jury: JuryResult | null;
+  thread: JuryMessage[];
+  thinking: JuryModel[];
   createdAt: number;
 }
 
@@ -91,13 +93,15 @@ export interface GameState {
   roundSeq: number;
   /** Session ids that have submitted their one fact-check this round. */
   factCheckUsed: Set<string>;
+  /** Session ids browsing the claim picker right now. Shown to the room; changes nothing else. */
+  considering: Set<string>;
+  /** Decided when the round ends (by score), or by the host on a tie. */
+  winner: RoundWinner | null;
   segments: TranscriptSegment[];
   claims: ExtractedClaim[];
   factChecks: FactCheckChallenge[];
   /** Id of the check currently holding the clocks, or null. */
   activeFactCheckId: string | null;
-  /** Session that opened the claim picker. The speaker's mic is already off. */
-  factCheckArmedBy: string | null;
 }
 
 export interface Room {
@@ -128,10 +132,11 @@ export function initialGameState(turnSeconds: number): GameState {
     buzz: null,
     roundSeq: 0,
     factCheckUsed: new Set(),
+    considering: new Set(),
+    winner: null,
     segments: [],
     claims: [],
     factChecks: [],
     activeFactCheckId: null,
-    factCheckArmedBy: null,
   };
 }

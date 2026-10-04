@@ -1,4 +1,4 @@
-import { JURY_SEATS, type JuryModel, type JuryResult, type JuryVote } from '@teeto/shared';
+import { JURY_SEATS, type JuryMessage, type JuryModel, type JuryResult, type JuryVote } from '@teeto/shared';
 import { claudeDeliberate, claudeIndependent } from './claudeJuror';
 import { geminiDeliberate, geminiIndependent } from './geminiJuror';
 import { geminiSkepticDeliberate, geminiSkepticIndependent } from './geminiSkepticJuror';
@@ -98,6 +98,23 @@ export interface JuryProgress {
   phase: 'independent' | 'deliberating';
 }
 
+/** Live hooks so the room can watch the jurors think and answer each other. */
+export interface JuryListener {
+  onPhase?: (phase: JuryProgress['phase']) => Promise<void> | void;
+  /** Jurors now writing a message. */
+  onThinking?: (models: JuryModel[]) => Promise<void> | void;
+  /** One juror finished a message. Fires in arrival order. */
+  onMessage?: (message: Omit<JuryMessage, 'id' | 'at'>) => Promise<void> | void;
+}
+
+async function notify(fn: () => Promise<void> | void): Promise<void> {
+  try {
+    await fn();
+  } catch (err) {
+    console.warn('[jury] listener failed:', safeMessage(err));
+  }
+}
+
 /** One seated juror has nobody to deliberate with, so the independent vote is the final vote. */
 function round1ToVote(analysis: Round1Analysis): JuryVote {
   return {
@@ -129,11 +146,22 @@ const SEATS: Record<JuryModel, {
  * Round 1 in parallel (each seated model sees only the claim), then Round 2 in parallel
  * (each seated model sees the other seated analyses). The tally is not a model call.
  */
-export async function runJury(claimId: string, claim: string, onPhase?: (phase: JuryProgress['phase']) => Promise<void> | void): Promise<JuryResult> {
-  await onPhase?.('independent');
+export async function runJury(claimId: string, claim: string, listener: JuryListener = {}): Promise<JuryResult> {
+  const { onPhase, onThinking, onMessage } = listener;
+  await notify(() => onPhase?.('independent'));
+  await notify(() => onThinking?.([...JURY_SEATS]));
   const settled = await Promise.all(JURY_SEATS.map(async (model) => {
     try {
-      return await attempt(model, (signal) => SEATS[model].independent(claim, signal));
+      const analysis = await attempt(model, (signal) => SEATS[model].independent(claim, signal));
+      await notify(() => onMessage?.({
+        model,
+        stage: 'opening',
+        verdict: analysis.verdict,
+        confidence: analysis.confidence,
+        text: analysis.reasoning,
+        changedVote: false,
+      }));
+      return analysis;
     } catch (err) {
       if ((model === 'gemini' || model === 'gemini_skeptic') && geminiBusy(err)) {
         console.warn('[jury] Gemini is unavailable, its vote is left out');
@@ -148,10 +176,20 @@ export async function runJury(claimId: string, claim: string, onPhase?: (phase: 
   const votes = round1.length < 2
     ? round1.map(round1ToVote)
     : await (async () => {
-      await onPhase?.('deliberating');
-      return Promise.all(round1.map((own) => {
+      await notify(() => onPhase?.('deliberating'));
+      await notify(() => onThinking?.(round1.map((analysis) => analysis.model)));
+      return Promise.all(round1.map(async (own) => {
         const packet = deliberationUser(claim, own, peerAnalyses(own, round1));
-        return attempt(`${own.model} deliberation`, (signal) => SEATS[own.model].deliberate(packet, own, signal));
+        const vote = await attempt(`${own.model} deliberation`, (signal) => SEATS[own.model].deliberate(packet, own, signal));
+        await notify(() => onMessage?.({
+          model: vote.model,
+          stage: 'reply',
+          verdict: vote.finalVerdict,
+          confidence: vote.finalConfidence,
+          text: vote.responseToOthers || vote.reasoning,
+          changedVote: vote.changedVote,
+        }));
+        return vote;
       }));
     })();
 

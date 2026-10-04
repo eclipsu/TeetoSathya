@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import type { ClaimOption, TeamIndex } from '@teeto/shared';
+import { APP_NAME, factCheckBlockReason, factCheckContextFromSnapshot, type ClaimOption, type TeamIndex } from '@teeto/shared';
 import { Avatar } from '../components/Avatar';
 import { ConnectionChip } from '../components/ConnectionChip';
 import { useToast } from '../components/Toasts';
@@ -14,6 +14,7 @@ import { DebateCapture } from '../voice/debateCapture';
 import { VoiceDock } from '../voice/VoiceDock';
 import { micClosedReason, spaceAction } from '../state/rules';
 import { useSpaceKey } from '../state/useSpaceKey';
+import { useGameSounds } from '../state/useGameSounds';
 import { playBuzz, playYourTurn, primeAudio } from '../lib/sfx';
 import { SfxToggle } from '../components/SfxToggle';
 import { BuzzOverlay } from './room/BuzzOverlay';
@@ -25,9 +26,12 @@ import { TeamColumn } from './room/TeamColumn';
 import { HostControlBar } from './room/HostControlBar';
 import { Stage } from './room/Stage';
 import { Summary } from './room/Summary';
-import { FactChat, FactCheckButton, FactCheckPicker } from './room/FactCheck';
+import { ClaimPanel, FactChat, FactCheckButton, type ClaimPanelState } from './room/FactCheck';
 import './room/room.css';
 import './room/stage.css';
+
+const CLOSED_PANEL: ClaimPanelState = { open: false, loading: false, claims: [], speakerName: null, error: null, busy: false };
+const CLAIM_POLL_MS = 4000;
 
 export function RoomScreen({ roomId }: { roomId: string }) {
   const room = useRoom(roomId);
@@ -36,11 +40,8 @@ export function RoomScreen({ roomId }: { roomId: string }) {
   const [pickerOpen, setPickerOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [demo, setDemo] = useState<{ busy: boolean; gemini: string | null; claude: string | null; claims: string[] }>({ busy: false, gemini: null, claude: null, claims: [] });
-  const [factPicker, setFactPicker] = useState<{ open: boolean; loading: boolean; claims: ClaimOption[]; speakerName: string | null; error: string | null; busy: boolean }>({
-    open: false, loading: false, claims: [], speakerName: null, error: null, busy: false,
-  });
+  const [claimPanel, setClaimPanel] = useState<ClaimPanelState>(CLOSED_PANEL);
   const factGen = useRef(0);
-  const [shaking, setShaking] = useState(false);
   const action = snapshot ? spaceAction(snapshot, myId) : null;
   const actionRef = useRef(action);
   actionRef.current = action;
@@ -53,13 +54,11 @@ export function RoomScreen({ roomId }: { roomId: string }) {
     else if (a?.action === 'buzz') void buzz();
   });
 
-  // Buzz moment: sound + one stage shake, for everyone in the room.
+  useGameSounds(snapshot);
+
+  // Buzz moment: sound for everyone in the room.
   useEffect(() => {
-    if (!room.buzzEvent) return;
-    playBuzz();
-    setShaking(true);
-    const t = setTimeout(() => setShaking(false), 400);
-    return () => clearTimeout(t);
+    if (room.buzzEvent) playBuzz();
   }, [room.buzzEvent]);
 
   // Chime when the floor passes to me.
@@ -89,6 +88,21 @@ export function RoomScreen({ roomId }: { roomId: string }) {
   useEffect(() => {
     if (status === 'joined' && me && me.role === null) setPickerOpen(true);
   }, [status, me]);
+
+  // While the picker is open the speaker keeps talking, so pick up their newest claims.
+  const canCheck = !!snapshot && !factCheckBlockReason(factCheckContextFromSnapshot(snapshot, myId));
+  const speakerKey = snapshot?.game.activeSide != null ? snapshot.game.hotSeat[snapshot.game.activeSide] : null;
+  useEffect(() => {
+    if (!claimPanel.open || claimPanel.busy) return;
+    if (!canCheck) return closeClaimPanel();
+    const gen = factGen.current;
+    const t = setInterval(() => void loadClaims(gen), CLAIM_POLL_MS);
+    return () => clearInterval(t);
+  }, [claimPanel.open, claimPanel.busy, canCheck]);
+  // The floor passed to someone else: their claims replace the old list.
+  useEffect(() => {
+    if (claimPanel.open && !claimPanel.busy) void loadClaims(factGen.current);
+  }, [speakerKey]);
 
   async function hostCall(event: string, extra: Record<string, unknown> = {}) {
     const res = await room.call(event as never, { hostToken: getHostToken(roomId), ...extra });
@@ -136,39 +150,45 @@ export function RoomScreen({ roomId }: { roomId: string }) {
     });
   }
 
-  async function openFactCheck() {
-    const gen = ++factGen.current;
-    setFactPicker({ open: true, loading: true, claims: [], speakerName: null, error: null, busy: false });
-    const res = await room.call('factcheck:options', undefined, 18_000);
-    if (factGen.current !== gen) {
-      void room.call('factcheck:cancel');
-      return;
-    }
+  // Browsing claims is local to the challenger: nothing pauses until they press Challenge.
+  async function loadClaims(gen: number) {
+    const res = await room.call('factcheck:options', undefined, 8_000);
+    if (factGen.current !== gen) return;
     if (!res.ok) {
-      setFactPicker((p) => ({ ...p, loading: false, error: res.message }));
+      setClaimPanel((p) => ({ ...p, loading: false, error: res.message }));
       return;
     }
     const claims = Array.isArray(res.claims) ? res.claims as ClaimOption[] : [];
     const speakerName = typeof res.speakerName === 'string' ? res.speakerName : null;
-    setFactPicker((p) => ({ ...p, loading: false, claims, speakerName, error: null }));
+    setClaimPanel((p) => ({ ...p, loading: false, claims, speakerName, error: null }));
+  }
+
+  function toggleClaimPanel() {
+    if (claimPanel.open) return closeClaimPanel();
+    const gen = ++factGen.current;
+    setClaimPanel({ ...CLOSED_PANEL, open: true, loading: true });
+    void room.call('factcheck:considering', { on: true });
+    void loadClaims(gen);
   }
 
   async function submitFactCheck(claimId: string) {
-    setFactPicker((p) => ({ ...p, busy: true, error: null }));
+    const gen = factGen.current;
+    setClaimPanel((p) => ({ ...p, busy: true, error: null }));
     const res = await room.call('factcheck:submit', { claimId }, 8_000);
+    if (factGen.current !== gen) return;
     if (!res.ok) {
-      setFactPicker((p) => ({ ...p, busy: false, error: res.message }));
+      setClaimPanel((p) => ({ ...p, busy: false, error: res.message }));
       toast('error', res.message);
       return;
     }
-    factGen.current += 1;
-    setFactPicker({ open: false, loading: false, claims: [], speakerName: null, error: null, busy: false });
+    closeClaimPanel();
   }
 
-  function closeFactPicker() {
+  function closeClaimPanel() {
     factGen.current += 1;
-    setFactPicker((p) => ({ ...p, open: false, busy: false }));
-    void room.call('factcheck:cancel');
+    setClaimPanel(CLOSED_PANEL);
+    // After a submit the server already cleared it; this is a no-op then.
+    void room.call('factcheck:considering', { on: false });
   }
 
   async function pick(role: 'speaker' | 'spectator', team: TeamIndex | null) {
@@ -196,22 +216,30 @@ export function RoomScreen({ roomId }: { roomId: string }) {
     { state: 'idle' as const, label: 'Connecting…' };
 
   return (
-    <VoiceProvider roomId={roomId} holdMic={!!snapshot.game.factCheck || !!snapshot.game.factCheckArmed} onConnected={() => void room.call('voice:joined')}>
+    <VoiceProvider roomId={roomId} holdMic={!!snapshot.game.factCheck} onConnected={() => void room.call('voice:joined')}>
       <FloorCapture socket={room.socket} enabled={holdsFloor} />
       <div className="room" data-status={snapshot.status} data-host={isHost}>
-        <header className="room__header">
+        <header className="room__header tile">
           <div className="room__header-left">
             <button className="icon-btn" onClick={async () => { await room.leave(); navigate('/'); }} aria-label="Leave room">
               <ArrowLeftIcon />
             </button>
-            <ConnectionChip {...chip} />
+            <div className="room__brand">
+              <span className="brand">{APP_NAME}</span>
+              <span className="room__view label">
+                {isHost ? 'Host view' : me?.role === 'spectator' ? 'Spectator view' : me?.role === 'speaker' ? 'Speaker view' : 'Joining'}
+                {snapshot.game.round > 0 && ` · Round ${snapshot.game.round}`}
+              </span>
+              <span className="room__listening">
+                Room {roomId.slice(0, 6).toUpperCase()} · {snapshot.participants.filter((p) => p.connected).length} listening · <ConnectionChip {...chip} />
+              </span>
+            </div>
           </div>
           <div className="room__title">
             <h1 className="room__topic">{snapshot.topic}</h1>
-            <div className="versus">
-              <span className="side-pill side-pill--a">{snapshot.sides[0]}</span>
-              <span className="versus__vs">vs</span>
-              <span className="side-pill side-pill--b">{snapshot.sides[1]}</span>
+            <div className="sides">
+              <span className="side-pill"><span className="dot dot--a" /><span>{snapshot.sides[0]}</span></span>
+              <span className="side-pill"><span className="dot dot--b" /><span>{snapshot.sides[1]}</span></span>
             </div>
           </div>
           <div className="room__header-right">
@@ -230,7 +258,7 @@ export function RoomScreen({ roomId }: { roomId: string }) {
               </button>
             )}
             <SfxToggle />
-          <VoiceDock isSpeaker={me?.role === 'speaker'} micReason={micClosedReason(snapshot, myId)} />
+            <VoiceDock isSpeaker={me?.role === 'speaker'} micReason={micClosedReason(snapshot, myId)} />
             <span className="me-chip" title={me?.username}>
               <Avatar name={me?.username ?? getSession().username ?? '?'} size={28} />
             </span>
@@ -239,28 +267,29 @@ export function RoomScreen({ roomId }: { roomId: string }) {
 
         {snapshot.status === 'ended' ? (
           <main className="room__main room__main--summary">
-            <Summary snapshot={snapshot} />
+            <Summary snapshot={snapshot} isHost={isHost} onPickWinner={(winner) => void hostCall('host:pickWinner', { winner })} />
           </main>
         ) : (
-          <main className={`room__main ${shaking ? 'is-shaking' : ''}`}>
-            <FactChat items={snapshot.game.factChecks} armed={snapshot.game.factCheckArmed} />
+          <main className="room__main">
+            <FactChat items={snapshot.game.factChecks} />
             <TeamColumn team={0} snapshot={snapshot} myId={myId} canTakeSeat={canTakeSeat} onTakeSeat={(t) => pick('speaker', t)} onHotSeat={hotSeatAction} />
             <Stage
               snapshot={snapshot}
               myId={myId}
               isHost={isHost}
               onDone={done}
+              onStart={() => void hostCall('host:startRound')}
               interimText={room.interim && snapshot.game.activeSide !== null && snapshot.game.hotSeat[snapshot.game.activeSide] === room.interim.speakerId ? room.interim.text : null}
               transcriptionAvailable={room.transcriptionAvailable}
+              picker={claimPanel.open ? <ClaimPanel state={claimPanel} onClose={closeClaimPanel} onSubmit={(id) => void submitFactCheck(id)} /> : undefined}
             />
             <TeamColumn team={1} snapshot={snapshot} myId={myId} canTakeSeat={canTakeSeat} onTakeSeat={(t) => pick('speaker', t)} onHotSeat={hotSeatAction} />
+            <SpectatorStrip snapshot={snapshot} myId={myId} />
           </main>
         )}
 
-        <SpectatorStrip snapshot={snapshot} myId={myId} />
-
         {(demo.gemini || demo.claude) && (
-          <section className="factcheck-history" aria-label="Dummy fact summary">
+          <section className="factcheck-history tile" aria-label="Dummy fact summary">
             <h3>TEMP TEST SUMMARY</h3>
             <p>Gemini: {demo.gemini}</p>
             <p>Claude: {demo.claude}</p>
@@ -274,10 +303,10 @@ export function RoomScreen({ roomId }: { roomId: string }) {
 
         <div className="room__footer">
           {snapshot.status === 'live' && (
-            <FactCheckButton snapshot={snapshot} myId={myId} onOpen={() => void openFactCheck()} />
+            <FactCheckButton snapshot={snapshot} myId={myId} open={claimPanel.open} onOpen={toggleClaimPanel} />
           )}
           {snapshot.status === 'live' && (
-            <button className="btn btn--sm" type="button" disabled={demo.busy} onClick={() => void runDummySummary()}>
+            <button className="btn btn--ghost btn--sm" type="button" disabled={demo.busy} onClick={() => void runDummySummary()}>
               {demo.busy ? 'Testing summary…' : 'Test summary'}
             </button>
           )}
@@ -287,21 +316,9 @@ export function RoomScreen({ roomId }: { roomId: string }) {
           {isHost && <HostControlBar snapshot={snapshot} hostCall={hostCall} onDelete={deleteRoom} />}
         </div>
 
-        <FactCheckPicker
-          open={factPicker.open}
-          speakerName={factPicker.speakerName}
-          loading={factPicker.loading}
-          claims={factPicker.claims}
-          error={factPicker.error}
-          busy={factPicker.busy}
-          onCancel={closeFactPicker}
-          onSubmit={(id) => void submitFactCheck(id)}
-        />
-
         <BuzzOverlay
-          event={room.buzzEvent}
           locked={snapshot.game.buzz}
-          challengedName={snapshot.participants.find((p) => p.id === (snapshot.game.buzz ?? room.buzzEvent?.buzz)?.challengedParticipantId)?.username ?? null}
+          challengedName={snapshot.participants.find((p) => p.id === snapshot.game.buzz?.challengedParticipantId)?.username ?? null}
         />
 
         {!isHost && snapshot.status === 'ended' && (
@@ -332,7 +349,7 @@ function FloorCapture({ socket, enabled }: { socket: ReturnType<typeof useRoom>[
 function NameConflict({ message, suggestions, onPick }: { message: string; suggestions: string[]; onPick: (n: string) => void }) {
   return (
     <main className="placeholder">
-      <h1 className="logo" style={{ fontSize: '2rem' }}>Name taken</h1>
+      <h1 className="placeholder__title">Name taken</h1>
       <p className="muted">{message} Pick another one for this room:</p>
       <div className="chips" style={{ justifyContent: 'center' }}>
         {suggestions.map((s) => (
@@ -349,7 +366,7 @@ function NameConflict({ message, suggestions, onPick }: { message: string; sugge
 function Gone({ title, message, action, onAction }: { title: string; message: string; action?: string; onAction?: () => void }) {
   return (
     <main className="placeholder">
-      <h1 className="logo" style={{ fontSize: '2rem' }}>{title}</h1>
+      <h1 className="placeholder__title">{title}</h1>
       <p className="muted">{message}</p>
       <div className="chips">
         {action && <button className="btn btn--primary" onClick={onAction}>{action}</button>}
@@ -362,11 +379,11 @@ function Gone({ title, message, action, onAction }: { title: string; message: st
 function RoomSkeleton() {
   return (
     <div className="room" aria-busy="true">
-      <header className="room__header"><div /><div className="skeleton" style={{ minHeight: 56, width: 420, borderRadius: 12 }} /><div /></header>
+      <header className="room__header skeleton" style={{ minHeight: 88 }} />
       <main className="room__main">
         <div className="team skeleton" />
-        <div className="stage skeleton" style={{ borderRadius: 18 }} />
-        <div className="team skeleton" />
+        <div className="stage skeleton" />
+        <div className="team team--1 skeleton" />
       </main>
     </div>
   );

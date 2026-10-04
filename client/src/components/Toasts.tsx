@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useMemo, useRef, useState, type ReactNode } from 'react';
+import { CheckIcon, InfoIcon, WarnIcon } from './icons';
 import './toasts.css';
 
 export type ToastType = 'info' | 'success' | 'warn' | 'error';
@@ -32,7 +33,8 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       <div className="toasts" role="status" aria-live="polite">
         {toasts.map((t) => (
           <div key={t.id} className={`toast toast--${t.type}`}>
-            {t.message}
+            {t.type === 'success' ? <CheckIcon /> : t.type === 'info' ? <InfoIcon /> : <WarnIcon />}
+            <span>{t.message}</span>
           </div>
         ))}
       </div>

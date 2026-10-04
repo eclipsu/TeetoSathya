@@ -1,85 +1,112 @@
-.stage { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
-.stage__round { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 10px 18px; }
-.stage__hint { margin: 0; text-align: center; font-size: 0.9rem; }
-.stage__seats { flex: 1; display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: stretch; gap: 14px; }
-.stage__vs { align-self: center; font-family: var(--font-display); font-weight: 900; font-size: 1.1rem; color: var(--text-faint); letter-spacing: 0.1em; }
+/* Center stage: big round clock, then two hot seats with their clock pills above.
+   A buzz or fact check slides a card up into the middle and pushes both seats aside. */
+.stage { display: flex; flex-direction: column; gap: var(--s5); min-width: 0; min-height: 0; }
+.stage__round { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--s2); padding: var(--s2) 0 0; }
+.stage .timer--lg .timer__digits { transition: font-size 450ms cubic-bezier(0.2, 0.8, 0.2, 1); }
+.stage--challenge .timer--lg .timer__digits { font-size: clamp(2rem, 2.8vw, 3.25rem); }
+.stage--challenge { gap: var(--s4); }
+.stage__lobby { display: flex; flex-direction: column; align-items: center; gap: var(--s4); }
+.stage__hint { margin: 0; text-align: center; font-size: 0.8125rem; color: var(--text-dim); }
+.stage__start { min-width: 96px; }
 
-.hot {
-  --team: var(--team-a);
-  --team-grad: var(--team-a-grad);
-  --team-soft: rgba(56, 189, 248, 0.14);
-  --glow-color: var(--team-a);
-  display: flex; flex-direction: column; gap: 10px; min-width: 0;
-  transition: transform var(--dur-slow) var(--ease-spring), opacity var(--dur-slow), filter var(--dur-slow);
+.stage__seats {
+  --slide: 480ms;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 0fr) minmax(0, 1fr);
+  align-items: start;
+  min-height: 0;
+  transition: grid-template-columns var(--slide) cubic-bezier(0.2, 0.8, 0.2, 1);
 }
-.hot--team-1 { --team: var(--team-b); --team-grad: var(--team-b-grad); --team-soft: rgba(251, 113, 133, 0.14); --glow-color: var(--team-b); }
-.hot.is-active { transform: scale(1.03); }
-.hot.is-idle { opacity: 0.55; filter: saturate(0.7); }
+.stage__seats.is-challenge { grid-template-columns: minmax(0, 0.62fr) minmax(0, 2fr) minmax(0, 0.62fr); }
+.stage__seats > .hot--team-0 { padding-right: var(--s2); }
+.stage__seats > .hot--team-1 { padding-left: var(--s2); }
+
+.stage__center { min-width: 0; overflow: hidden; align-self: stretch; display: flex; }
+.stage__center-inner { flex: 1; min-width: 0; display: flex; flex-direction: column; margin: 0 var(--s2); padding-top: calc(var(--fs-timer-md) + 20px + var(--s3)); }
+.stage__seats.is-challenge .stage__center-inner { animation: slide-up var(--slide) cubic-bezier(0.2, 0.8, 0.2, 1) both 60ms; }
+.stage__seats.is-leaving .stage__center-inner { animation: slide-down 300ms ease-in both; }
+@keyframes slide-up { from { opacity: 0; transform: translateY(72px); } }
+@keyframes slide-down { to { opacity: 0; transform: translateY(48px); } }
+
+/* Hot seat: pill timer, then the card */
+.hot { --team: var(--team-a); --ring-color: var(--team-a); display: flex; flex-direction: column; align-items: center; gap: var(--s3); min-width: 0; transition: opacity var(--dur) var(--ease); }
+.hot--team-1 { --team: var(--team-b); --ring-color: var(--team-b); }
+.hot.is-idle { opacity: 0.55; }
 
 .hot__card {
-  position: relative;
-  flex: 1;
-  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px;
-  min-height: clamp(210px, 31vh, 340px);
-  padding: 24px 18px 20px;
-  border-radius: 22px;
-  background: radial-gradient(circle at 50% 30%, var(--team-soft), transparent 70%), var(--glass);
-  border: 1px solid var(--border);
-  backdrop-filter: blur(var(--blur));
-  overflow: hidden;
-  /* Speaking glow: radius + opacity scale with --level (0-1). Attack/release smoothing is in voice/levels.ts. */
-  box-shadow:
-    0 0 calc(var(--level, 0) * 60px) calc(var(--level, 0) * 6px) color-mix(in srgb, var(--team) calc(var(--level, 0) * 70%), transparent),
-    inset 0 0 0 1px color-mix(in srgb, var(--team) calc(var(--level, 0) * 100%), transparent);
-  transition: box-shadow 100ms linear, border-color var(--dur);
+  align-self: stretch;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--s1);
+  min-height: clamp(220px, 30vh, 360px);
+  padding: var(--s5) var(--s4);
+  text-align: center;
+  transition: border-color var(--dur) var(--ease), min-height var(--slide, 480ms) cubic-bezier(0.2, 0.8, 0.2, 1);
 }
-.hot.is-active .hot__card {
-  border-color: color-mix(in srgb, var(--team) 60%, transparent);
-  box-shadow:
-    0 0 calc(30px + var(--level, 0) * 60px) calc(var(--level, 0) * 8px) color-mix(in srgb, var(--team) calc(30% + var(--level, 0) * 50%), transparent),
-    inset 0 0 0 1px color-mix(in srgb, var(--team) 50%, transparent);
-}
-.hot__bar { position: absolute; inset: 0 0 auto; height: 4px; background: var(--team-grad); }
-.hot__live {
-  position: absolute; top: 14px; right: 14px;
-  padding: 3px 9px; border-radius: 6px;
-  background: #ef4444; color: #fff;
-  font-size: 0.7rem; font-weight: 900; letter-spacing: 0.12em;
-  box-shadow: 0 0 16px rgba(239, 68, 68, 0.6);
-  animation: live-blink 1.6s ease-in-out infinite;
-}
-.hot__avatar { position: relative; padding: 6px; }
-.hot__avatar .avatar { box-shadow: 0 16px 40px rgba(0, 0, 0, 0.45); }
-.hot__name { margin: 4px 0 0; display: flex; align-items: center; gap: 8px; font-family: var(--font-display); font-size: 1.4rem; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.hot__state { margin: 0; font-size: 0.8rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--team); }
-.hot__mic { display: flex; align-items: center; gap: 8px; color: var(--text-dim); }
-.hot__mic .level-meter { width: 110px; height: 8px; }
-.hot__mic .level-meter__seg.is-lit { background: var(--team); box-shadow: 0 0 6px var(--team); }
-.hot__done { margin-top: 6px; }
-.hot__done kbd { font: inherit; font-size: 0.75rem; padding: 1px 6px; border-radius: 5px; background: rgba(11, 15, 26, 0.25); }
-.hot__empty { display: grid; justify-items: center; gap: 10px; }
-.hot__empty-ring { width: 120px; height: 120px; border-radius: 50%; border: 2px dashed rgba(255, 255, 255, 0.15); }
+.hot.is-active .hot__card { border-color: var(--team); }
+.hot__avatar { padding: 4px; margin-bottom: var(--s2); }
+.hot__avatar .avatar { transition: width 450ms cubic-bezier(0.2, 0.8, 0.2, 1), height 450ms cubic-bezier(0.2, 0.8, 0.2, 1), font-size 450ms; }
+.hot__live, .hot__state { font-size: var(--fs-caption); font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-dim); }
+.hot__state { color: var(--text-faint); }
+.hot.is-challenged .hot__state { color: var(--warn); }
+.hot__name { margin: 0; display: flex; align-items: center; justify-content: center; gap: var(--s2); font-size: clamp(1.125rem, 1.4vw, 1.5rem); font-weight: 600; letter-spacing: -0.01em; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hot__side { display: inline-flex; align-items: center; gap: 6px; min-width: 0; max-width: 100%; font-size: 0.8125rem; color: var(--text-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hot__side .dot { width: 6px; height: 6px; background: var(--team); }
+.hot__mic { margin-top: var(--s2); }
+.hot__mic .level-meter { width: 96px; height: 6px; }
+.hot__mic .level-meter__seg.is-lit { background: var(--team); }
+.hot__done { margin-top: var(--s3); }
+.hot__done kbd { font: inherit; font-size: var(--fs-caption); padding: 0 6px; border-radius: 4px; border: 1px solid rgba(15, 17, 21, 0.3); }
+.hot__empty { display: grid; justify-items: center; gap: var(--s2); }
+.hot__empty .muted { margin: 0; }
+.hot__empty-ring { width: 88px; height: 88px; border-radius: 50%; border: 1px solid var(--border); background: var(--surface-raised); }
+.hot.is-challenged .hot__card { border-color: var(--warn); }
 
-.hot.is-challenged { opacity: 1; filter: none; }
-.hot.is-challenged .hot__card { border-color: #f59e0b; box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.5), 0 0 40px rgba(245, 158, 11, 0.25); }
-.hot.is-challenged .hot__state { color: #fbbf24; }
+/* Pushed aside by a challenge */
+.hot.is-compact .hot__card { min-height: 180px; padding: var(--s4) var(--s2); }
+.hot.is-compact .hot__name { font-size: 1rem; }
+.hot.is-compact .hot__done kbd { display: none; }
+.hot.is-compact .timer--md .timer__digits { font-size: 1.125rem; padding: 6px 12px; }
 
-/* Big ring around the hot-seat avatar while speaking */
-.hot__avatar .avatar--speaking::after { inset: -8px; border-width: 3px; }
+/* Buzz card (center) */
+.buzz-card {
+  --marker: var(--warn);
+  display: grid; justify-items: center; gap: var(--s2);
+  padding: var(--s5) var(--s4) var(--s6);
+  text-align: center;
+}
+.buzz-card--a { --marker: var(--team-a); }
+.buzz-card--b { --marker: var(--team-b); }
+.buzz-card__dot { width: 6px; height: 6px; border-radius: 50%; background: var(--marker); margin-bottom: var(--s1); }
+.buzz-card__text { margin-top: var(--s2); font-size: 1.75rem; font-weight: 600; letter-spacing: 0.04em; line-height: 1; }
+.buzz-card__who { font-size: 0.875rem; color: var(--text-dim); }
+.buzz-card__wait { font-size: var(--fs-label); color: var(--text-faint); }
 
-@media (max-width: 1100px) {
-  .hot__card { min-height: 250px; }
-  .hot__avatar .avatar, .hot__avatar .avatar svg, .hot__empty-ring { width: 96px !important; height: 96px !important; }
+.transcript-live { margin: 0; max-width: 72ch; text-align: center; color: var(--text-dim); min-height: 1.5em; }
+.transcript-off { margin: 0; text-align: center; font-size: var(--fs-label); color: var(--warn); }
+
+@media (max-width: 1280px) {
+  .stage__seats.is-challenge { grid-template-columns: minmax(0, 0.5fr) minmax(0, 2fr) minmax(0, 0.5fr); }
+  .hot.is-compact .hot__side, .hot.is-compact .hot__done { display: none; }
 }
-@media (max-width: 560px) {
-  .stage__seats { grid-template-columns: 1fr 1fr; }
-  .stage__vs { display: none; }
-  .hot__card { min-height: 200px; padding: 22px 10px 16px; }
-  .hot__avatar .avatar, .hot__avatar .avatar svg, .hot__empty-ring { width: 72px !important; height: 72px !important; }
-  .hot__name { font-size: 1.05rem; }
-  .hot__mic .level-meter { width: 70px; }
+@media (max-width: 1000px) {
+  .stage { gap: var(--s4); }
+  .hot__card { min-height: 220px; }
 }
-@media (prefers-reduced-motion: reduce) {
-  .hot.is-active { transform: none; }
-  .hot__live { animation: none; }
+/* Phone: everything stacks; the challenge sits between the two seats */
+@media (max-width: 640px) {
+  .stage__seats, .stage__seats.is-challenge { grid-template-columns: minmax(0, 1fr); row-gap: var(--s3); }
+  .stage__seats > .hot--team-0, .stage__seats > .hot--team-1 { padding: 0; }
+  .stage__center-inner { margin: 0; padding-top: 0; }
+  .hot { flex-direction: row-reverse; align-items: stretch; }
+  .hot .timer { justify-content: center; }
+  .hot__card, .hot.is-compact .hot__card { flex: 1; min-height: 0; flex-direction: row; flex-wrap: wrap; justify-content: flex-start; text-align: left; gap: 2px var(--s3); padding: var(--s3) var(--s4); }
+  .hot__avatar { margin: 0; padding: 0; }
+  .hot__avatar .avatar, .hot__empty-ring { width: 48px !important; height: 48px !important; font-size: 16px !important; }
+  .hot__name { font-size: 1.0625rem; justify-content: flex-start; }
+  .hot__mic { display: none; }
+  .hot__empty { grid-auto-flow: column; align-items: center; }
 }
+
+.stage__score { display: inline-flex; align-items: center; gap: var(--s2); margin: 0; font-size: 0.8125rem; color: var(--text-dim); font-variant-numeric: tabular-nums; animation: fade-in var(--dur) var(--ease); }
+.stage__score strong { color: var(--text); font-size: 0.9375rem; }
+.stage__score .dot { width: 6px; height: 6px; }
+.stage__score-dash { color: var(--text-faint); }

@@ -1,15 +1,23 @@
 import { nanoid } from 'nanoid';
 import type { Room } from '../domain/model';
-import { activeSpeaker, armFactCheck, canFactCheck, disarmFactCheck, dismissFactCheck, getRecentClaims, mergeClaims, openFactCheck, resolveFactCheck, setJuryPhase } from '../domain/factcheck';
+import { activeSpeaker, addJuryMessage, canFactCheck, dismissFactCheck, getRecentClaims, mergeClaims, openFactCheck, resolveFactCheck, setConsidering, setJuryPhase, setJuryThinking } from '../domain/factcheck';
 import { DUMMY_SPEECH, probeClaimExtraction } from '../services/claimExtractor';
 import { runJury } from '../services/factChecking/jury';
-import type { Transcription } from '../services/transcription';
 import { HandlerError, type AppSocket, type RoomHub } from './hub';
 
-const FLUSH_WAIT_MS = 14_000;
+/** Jurors look like they are thinking at least this long before a message lands. */
+const THINK_MS = 2500;
+/** Gap between two juror messages, so parallel answers read one after another. */
+const MESSAGE_GAP_MS = 1400;
+/** Time the client spends typing out the last message before the verdict shows. */
+const TYPE_OUT_MS = 1800;
+/** Verdict stays on screen this long, then the round resumes by itself. */
+const VERDICT_HOLD_MS = 3500;
+
+const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, Math.max(0, ms)));
 
 /** Fact-check socket API. Rules live in domain/factcheck.ts; the jury runs after the room is paused. */
-export function installFactCheckHandlers(hub: RoomHub, transcription: Transcription) {
+export function installFactCheckHandlers(hub: RoomHub) {
   hub.io.on('connection', (socket: AppSocket) => {
     // TEMP: click-to-test claim extraction. Delete with the button.
     hub.handle(socket, 'claims:demo', async (ack) => {
@@ -38,47 +46,26 @@ export function installFactCheckHandlers(hub: RoomHub, transcription: Transcript
       ack?.({ ok: true, gemini: line(probe.gemini), claude: line(probe.claude), claims });
     });
 
+    // Read-only: the challenger browses claims while the debate keeps going.
+    // Nothing pauses and no mic closes until they submit one.
     hub.handle(socket, 'factcheck:options', async (ack) => {
       if (typeof ack !== 'function') return;
       const room = await hub.requireRoom(socket);
-      const armed = await hub.store.update(room.id, (r) => ({ room: r, res: armFactCheck(r, socket.data.sessionId, Date.now()) }));
-      if (!armed) throw new HandlerError('room_not_found', 'This room no longer exists.');
-      if (!armed.res.ok) throw new HandlerError('invalid_state', armed.res.reason);
-      await hub.changed(armed.room);
-      hub.toastRoom(room.id, 'warn', `${armed.res.challengerName} called a fact check.`);
-      const held = activeSpeaker(armed.room);
-      if (held) toastOne(hub, room.id, held.sessionId, 'warn', 'Fact check. Your microphone is off.');
-      try {
-        await Promise.race([
-          transcription.flushCurrent(armed.room),
-          new Promise<void>((resolve) => setTimeout(resolve, FLUSH_WAIT_MS)),
-        ]);
-        const fresh = await hub.store.get(room.id);
-        if (!fresh) throw new HandlerError('room_not_found', 'This room no longer exists.');
-        const again = canFactCheck(fresh, socket.data.sessionId);
-        if (!again.ok) throw new HandlerError('invalid_state', again.reason);
-        const speaker = activeSpeaker(fresh);
-        if (!speaker) throw new HandlerError('invalid_state', 'Nobody is speaking.');
-        const claims = getRecentClaims(fresh, speaker.sessionId, 4).map((c) => ({ id: c.id, text: c.text, createdAt: c.createdAt }));
-        ack({ ok: true, claims, speakerId: speaker.id, speakerName: speaker.username });
-      } catch (err) {
-        const rolled = await hub.store.update(room.id, (r) => {
-          disarmFactCheck(r, socket.data.sessionId, Date.now());
-          return { room: r, res: true };
-        });
-        if (rolled) await hub.changed(rolled.room);
-        throw err;
-      }
+      const gate = canFactCheck(room, socket.data.sessionId);
+      if (!gate.ok) throw new HandlerError('invalid_state', gate.reason);
+      const speaker = activeSpeaker(room);
+      if (!speaker) throw new HandlerError('invalid_state', 'Nobody is speaking.');
+      const claims = getRecentClaims(room, speaker.sessionId, 4).map((c) => ({ id: c.id, text: c.text, createdAt: c.createdAt }));
+      ack({ ok: true, claims, speakerId: speaker.id, speakerName: speaker.username });
     });
 
-    hub.handle(socket, 'factcheck:cancel', async (ack) => {
+    // Shows "considering a challenge" next to the challenger. Nothing pauses.
+    hub.handle(socket, 'factcheck:considering', async (p, ack) => {
       const room = await hub.requireRoom(socket);
-      const out = await hub.store.update(room.id, (r) => {
-        disarmFactCheck(r, socket.data.sessionId, Date.now());
-        return { room: r, res: true };
-      });
-      if (out) await hub.changed(out.room);
+      const on = p?.on === true;
+      const out = await hub.store.update(room.id, (r) => ({ room: r, res: setConsidering(r, socket.data.sessionId, on) }));
       ack?.({ ok: true });
+      if (out?.res) await hub.changed(out.room);
     });
 
     hub.handle(socket, 'factcheck:submit', async (p, ack) => {
@@ -126,17 +113,35 @@ function safeJuryError(err: unknown): string {
 async function judge(hub: RoomHub, roomId: string, challengeId: string, claimId: string, claim: string): Promise<void> {
   let resolution: { verdict: 'CORRECT' | 'INCORRECT' | 'INCONCLUSIVE'; confidence: number; explanation: string; unavailable?: boolean; jury?: Awaited<ReturnType<typeof runJury>> | null };
   try {
-    const jury = await runJury(claimId, claim, async (phase) => {
-      try {
-        const updated = await hub.store.update(roomId, (room: Room) => ({
-          room,
-          res: setJuryPhase(room, challengeId, phase),
-        }));
-        if (updated?.res) await hub.changed(updated.room);
-      } catch (err) {
-        console.warn('[jury] phase broadcast failed:', safeJuryError(err));
-      }
+    const push = async (apply: (room: Room) => boolean) => {
+      const updated = await hub.store.update(roomId, (room: Room) => ({ room, res: apply(room) }));
+      if (updated?.res) await hub.changed(updated.room);
+    };
+    // Room updates go out one at a time and paced: jurors "think" for a moment before each
+    // message, and answers that arrive together are spread out so each one can be read.
+    let thinkingSince = Date.now();
+    let lastMessageAt = 0;
+    let queue: Promise<void> = Promise.resolve();
+    const paced = (wait: () => number, apply: (room: Room) => boolean, after?: () => void) => {
+      queue = queue.then(async () => {
+        await sleep(wait());
+        after?.();
+        await push(apply);
+      });
+      return queue;
+    };
+    const jury = await runJury(claimId, claim, {
+      onPhase: (phase) => paced(() => 0, (room) => setJuryPhase(room, challengeId, phase)),
+      onThinking: (models) => paced(() => lastMessageAt ? lastMessageAt + MESSAGE_GAP_MS - Date.now() : 0, (room) => setJuryThinking(room, challengeId, models), () => { thinkingSince = Date.now(); }),
+      onMessage: (message) => paced(
+        () => Math.max(thinkingSince + THINK_MS, lastMessageAt + MESSAGE_GAP_MS) - Date.now(),
+        (room) => addJuryMessage(room, challengeId, { ...message, id: nanoid(8), at: Date.now() }),
+        () => { lastMessageAt = Date.now(); },
+      ),
     });
+    await queue;
+    // Let the last message finish typing out before the verdict lands.
+    await sleep(lastMessageAt + TYPE_OUT_MS - Date.now());
     resolution = jury.verdict
       ? {
         verdict: jury.verdict,
@@ -161,6 +166,16 @@ async function judge(hub: RoomHub, roomId: string, challengeId: string, claimId:
   if (!updated?.res.ok) return;
   try {
     await hub.changed(updated.room);
+  } catch (err) {
+    console.error('[factcheck] broadcast failed', err);
+  }
+
+  // Hold the verdict on screen, then resume the round. The host can still dismiss sooner.
+  await sleep(VERDICT_HOLD_MS);
+  const resumed = await hub.store.update(roomId, (room: Room) => ({ room, res: dismissFactCheck(room, Date.now(), challengeId) }));
+  if (!resumed?.res.ok) return;
+  try {
+    await hub.changed(resumed.room);
   } catch (err) {
     console.error('[factcheck] broadcast failed', err);
   }

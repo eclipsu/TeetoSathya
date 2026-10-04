@@ -17,11 +17,13 @@ export function TeamColumn({ team, snapshot, myId, canTakeSeat, onTakeSeat, onHo
   const hot = snapshot.game.hotSeat[team];
 
   return (
-    <section className={`team team--${team}`} aria-label={`Team ${snapshot.sides[team]}`}>
+    <section className={`team team--${team} tile`} aria-label={`Team ${snapshot.sides[team]}`}>
       <header className="team__head">
-        <span className="team__letter">{team === 0 ? 'A' : 'B'}</span>
-        <h2 className="team__name">{snapshot.sides[team]}</h2>
-        <span className="team__count">{speakers.length}/{max}</span>
+        <span className={`dot dot--${team === 0 ? 'a' : 'b'}`} aria-hidden="true" />
+        <div className="team__title">
+          <h2 className="team__name">{snapshot.sides[team]}</h2>
+          <span className="team__count">{speakers.length} / {max} seats</span>
+        </div>
       </header>
       <ol className="team__seats">
         {Array.from({ length: max }, (_, i) => i + 1).map((seat) => {
@@ -34,6 +36,7 @@ export function TeamColumn({ team, snapshot, myId, canTakeSeat, onTakeSeat, onHo
               participant={p}
               isMe={!!p && p.id === myId}
               inHotSeat={!!p && p.id === hot}
+              considering={!!p && snapshot.game.consideringIds.includes(p.id)}
               onTake={canTakeSeat ? () => onTakeSeat(team) : undefined}
               onHotSeat={p && onHotSeat ? () => onHotSeat(team, p.id) : undefined}
             />

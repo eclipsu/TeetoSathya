@@ -75,6 +75,14 @@ export function installGameHandlers(hub: RoomHub) {
       ack?.({ ok: true });
     });
 
+    hub.handle(socket, 'host:pickWinner', async (p, ack) => {
+      const room = await hub.requireHost(socket, p?.hostToken);
+      const winner = p?.winner;
+      if (winner !== 0 && winner !== 1 && winner !== 'draw') throw new HandlerError('bad_request', 'Pick a side or a draw.');
+      await apply(room.id, (r) => game.pickWinner(r, winner));
+      ack?.({ ok: true });
+    });
+
     hub.handle(socket, 'host:settings', async (p, ack) => {
       const room = await hub.requireHost(socket, p?.hostToken);
       const parsed = validateRoomInput({ topic: room.topic, sides: room.sides, turnSeconds: p?.turnSeconds, roundSeconds: p?.roundSeconds });

@@ -1,4 +1,4 @@
-import type { FactCheckView, GameView, ParticipantView, RoomSnapshot } from '@teeto/shared';
+import { scoreFactChecks, type FactCheckView, type GameView, type ParticipantView, type RoomSnapshot } from '@teeto/shared';
 import type { FactCheckChallenge, Room } from './model';
 
 function toFactCheckView(f: FactCheckChallenge): FactCheckView {
@@ -16,6 +16,8 @@ function toFactCheckView(f: FactCheckChallenge): FactCheckView {
     unavailable: f.unavailable,
     juryPhase: f.juryPhase,
     jury: f.jury,
+    thread: f.thread,
+    thinking: f.thinking,
     createdAt: f.createdAt,
   };
 }
@@ -35,6 +37,7 @@ export function toSnapshot(room: Room, now: number): RoomSnapshot {
   }));
   const g = room.game;
   const game: GameView = {
+    round: g.roundSeq,
     hotSeat: [idOf(g.hotSeat[0]), idOf(g.hotSeat[1])],
     activeSide: g.activeSide,
     clocks: [g.clocks[0], g.clocks[1]],
@@ -49,17 +52,11 @@ export function toSnapshot(room: Room, now: number): RoomSnapshot {
       const active = g.activeFactCheckId ? g.factChecks.find((f) => f.id === g.activeFactCheckId) : undefined;
       return active ? toFactCheckView(active) : null;
     })(),
-    factCheckArmed: (() => {
-      if (!g.factCheckArmedBy) return null;
-      const challenger = room.participants.get(g.factCheckArmedBy);
-      const side = g.activeSide;
-      const speakerId = side === null ? null : g.hotSeat[side];
-      const speaker = speakerId ? room.participants.get(speakerId) : undefined;
-      if (!challenger || !speaker) return null;
-      return { challengerName: challenger.username, speakerName: speaker.username };
-    })(),
     factChecks: g.factChecks.map(toFactCheckView),
     factCheckUsedIds: [...g.factCheckUsed].map((sid) => idOf(sid)).filter((id): id is string => !!id),
+    consideringIds: [...g.considering].map((sid) => idOf(sid)).filter((id): id is string => !!id),
+    score: scoreFactChecks(g.factChecks),
+    winner: room.status === 'ended' ? g.winner : null,
   };
   return { id: room.id, topic: room.topic, sides: room.sides, status: room.status, settings: room.settings, participants, game, serverNow: now };
 }

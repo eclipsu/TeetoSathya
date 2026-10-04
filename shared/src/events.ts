@@ -59,6 +59,8 @@ export interface ClientToServerEvents {
   'host:pause': (p: HostPayload, ack: Ack) => void;
   'host:resume': (p: HostPayload, ack: Ack) => void;
   'host:endRound': (p: HostPayload, ack: Ack) => void;
+  /** Break a tied round after it ended: a side, or 'draw'. */
+  'host:pickWinner': (p: HostPayload & { winner: TeamIndex | 'draw' }, ack: Ack) => void;
   'host:settings': (p: HostPayload & { turnSeconds: number; roundSeconds: number }, ack: Ack) => void;
 
   /** Active hot-seat speaker: "I'm done", hands the floor to the other side. */
@@ -72,13 +74,16 @@ export interface ClientToServerEvents {
    * is the server-authoritative hot-seat speaker. No ack (high frequency).
    */
   'transcript:audio': (chunk: Uint8Array) => void;
-  /** Latest claims of the current opposing speaker. Does not consume the fact-check. */
+  /**
+   * Latest claims of the current opposing speaker. Read-only: does not pause the round,
+   * cut anyone's mic or consume the fact-check. Only `factcheck:submit` challenges.
+   */
   'factcheck:options': (ack: Ack<{ claims: ClaimOption[]; speakerId: string | null; speakerName: string | null }>) => void;
-  /** Close the claim picker without challenging. Turns the speaker's mic back on. */
-  'factcheck:cancel': (ack: Ack) => void;
   /** TEMP: run claim extraction on a fixed sentence. Delete with the test button. */
   'claims:demo': (ack: Ack<{ gemini: string; claude: string; claims: string[] }>) => void;
   'factcheck:submit': (p: { claimId: string }, ack: Ack) => void;
+  /** Challenger opened (true) or closed (false) the claim picker. Only shows a label to the room. */
+  'factcheck:considering': (p: { on: boolean }, ack: Ack) => void;
   'factcheck:dismiss': (p: HostPayload, ack: Ack) => void;
 }
 

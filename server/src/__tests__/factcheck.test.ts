@@ -3,15 +3,16 @@ import * as game from '../domain/game';
 import { setRole } from '../domain/seats';
 import { canPublish } from '../domain/micPolicy';
 import {
-  armFactCheck,
+  addJuryMessage,
   canFactCheck,
   coerceVerdict,
-  disarmFactCheck,
   dismissFactCheck,
   getRecentClaims,
   mergeClaims,
   openFactCheck,
   resolveFactCheck,
+  setConsidering,
+  setJuryThinking,
 } from '../domain/factcheck';
 import { join, makeRoom } from './helpers';
 import type { Room } from '../domain/model';
@@ -40,13 +41,10 @@ function addClaim(room: Room, speakerSessionId: string, team: TeamIndex, id: str
 }
 
 describe('fact-check eligibility', () => {
-  it('clicking fact check cuts the speaker mic until the picker is cancelled', () => {
+  it('browsing claims does not pause the round or cut the speaker mic', () => {
     const room = liveRoom();
     const speaker = room.participants.get(room.hostSessionId)!;
-    expect(canPublish(room, speaker)).toBe(true);
-    expect(armFactCheck(room, 'sess-b1-00001', T0 + 500).ok).toBe(true);
-    expect(canPublish(room, speaker)).toBe(false);
-    disarmFactCheck(room, 'sess-b1-00001', T0 + 800);
+    expect(canFactCheck(room, 'sess-b1-00001').ok).toBe(true);
     expect(room.game.paused).toBe(false);
     expect(canPublish(room, speaker)).toBe(true);
   });
@@ -197,10 +195,76 @@ describe('submitting a challenge', () => {
   });
 });
 
+describe('jury conversation', () => {
+  it('appends juror messages in arrival order and clears thinking on resolve', () => {
+    const room = liveRoom();
+    addClaim(room, room.hostSessionId, 0, 'c1', 'Water boils at 90C at sea level.');
+    expect(openFactCheck(room, 'sess-b1-00001', 'c1', T0 + 1000, 'fc1').ok).toBe(true);
+    expect(setJuryThinking(room, 'fc1', ['gemini', 'claude'])).toBe(true);
+    const msg = { stage: 'opening' as const, verdict: 'INCORRECT' as const, confidence: 0.9, text: 'It boils at 100C.', changedVote: false, at: T0 + 2000 };
+    addJuryMessage(room, 'fc1', { ...msg, id: 'm1', model: 'claude' });
+    const fc = room.game.factChecks[0]!;
+    expect(fc.thread.map((m) => m.model)).toEqual(['claude']);
+    expect(fc.thinking).toEqual(['gemini']);
+    addJuryMessage(room, 'fc1', { ...msg, id: 'm2', model: 'gemini' });
+    expect(fc.thinking).toEqual([]);
+    resolveFactCheck(room, 'fc1', { verdict: 'INCORRECT', confidence: 0.9, explanation: '2–0 INCORRECT' });
+    expect(addJuryMessage(room, 'fc1', { ...msg, id: 'm3', model: 'gemini' })).toBe(false);
+    expect(fc.thread).toHaveLength(2);
+  });
+});
+
 describe('verdict coercion', () => {
   it('downgrades a low-confidence decisive verdict to inconclusive', () => {
     expect(coerceVerdict('SUPPORTED', 0.79)).toBe('INCONCLUSIVE');
     expect(coerceVerdict('CONTRADICTED', 0.8)).toBe('CONTRADICTED');
     expect(coerceVerdict('nope', 1)).toBeNull();
+  });
+});
+
+describe('considering a challenge', () => {
+  it('shows only for someone who could challenge, and clears when they submit', () => {
+    const room = liveRoom();
+    addClaim(room, room.hostSessionId, 0, 'c1', 'The capital of Australia is Sydney.');
+    expect(setConsidering(room, 'sess-spec-0001', true)).toBe(false);
+    expect(setConsidering(room, 'sess-b1-00001', true)).toBe(true);
+    expect(room.game.paused).toBe(false);
+    expect(openFactCheck(room, 'sess-b1-00001', 'c1', T0 + 1000, 'fc1').ok).toBe(true);
+    expect(room.game.considering.size).toBe(0);
+  });
+});
+
+describe('automatic resume after a verdict', () => {
+  it('only dismisses the check it was scheduled for', () => {
+    const room = liveRoom();
+    addClaim(room, room.hostSessionId, 0, 'c1', 'The capital of Australia is Sydney.');
+    openFactCheck(room, 'sess-b1-00001', 'c1', T0 + 1000, 'fc1');
+    resolveFactCheck(room, 'fc1', { verdict: 'INCORRECT', confidence: 0.9, explanation: 'No.' });
+    expect(dismissFactCheck(room, T0 + 2000, 'other').ok).toBe(false);
+    expect(dismissFactCheck(room, T0 + 2000, 'fc1').ok).toBe(true);
+    expect(room.game.paused).toBe(false);
+  });
+});
+
+describe('round winner', () => {
+  it('a landed challenge scores for the challenger and decides the winner', () => {
+    const room = liveRoom();
+    addClaim(room, room.hostSessionId, 0, 'c1', 'The capital of Australia is Sydney.');
+    openFactCheck(room, 'sess-b1-00001', 'c1', T0 + 1000, 'fc1');
+    resolveFactCheck(room, 'fc1', { verdict: 'INCORRECT', confidence: 0.9, explanation: 'No.' });
+    dismissFactCheck(room, T0 + 2000);
+    expect(game.endRound(room, T0 + 3000).ok).toBe(true);
+    expect(room.game.winner).toBe(1);
+    expect(game.pickWinner(room, 0).ok).toBe(false);
+  });
+
+  it('a tie waits for the host, who can pick once', () => {
+    const room = liveRoom();
+    expect(game.pickWinner(room, 0).ok).toBe(false);
+    game.endRound(room, T0 + 3000);
+    expect(room.game.winner).toBe(null);
+    expect(game.pickWinner(room, 'draw').ok).toBe(true);
+    expect(room.game.winner).toBe('draw');
+    expect(game.pickWinner(room, 1).ok).toBe(false);
   });
 });

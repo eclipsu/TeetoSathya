@@ -1,4 +1,4 @@
-import { factCheckBlockReason, type FactCheckOutcome, type FactVerdict, type JuryPhase, type JuryResult, type TeamIndex } from '@teeto/shared';
+import { factCheckBlockReason, type FactCheckOutcome, type FactVerdict, type JuryMessage, type JuryModel, type JuryPhase, type JuryResult, type TeamIndex } from '@teeto/shared';
 import type { ExtractedClaim, FactCheckChallenge, Participant, Room, TranscriptSegment } from './model';
 import { canPublish } from './micPolicy';
 import { freezeClocks, unfreezeClocks } from './game';
@@ -33,9 +33,9 @@ export function canFactCheck(room: Room, sessionId: string): { ok: true } | { ok
     team: p.team,
     activeSide: side,
     publishing: canPublish(room, p),
-    paused: room.game.paused && room.game.factCheckArmedBy !== sessionId,
+    paused: room.game.paused,
     buzzOpen: room.game.buzz !== null,
-    factCheckOpen: room.game.activeFactCheckId !== null || (room.game.factCheckArmedBy !== null && room.game.factCheckArmedBy !== sessionId),
+    factCheckOpen: room.game.activeFactCheckId !== null,
     alreadyUsed: room.game.factCheckUsed.has(sessionId),
     speakerPresent: side !== null && !!room.game.hotSeat[side],
   });
@@ -100,25 +100,6 @@ export type OpenFactCheckResult =
   | { ok: true; challenge: FactCheckChallenge }
   | { ok: false; reason: string };
 
-/** Stop the speaker's mic as soon as Fact Check is clicked, before a claim is chosen. */
-export function armFactCheck(room: Room, sessionId: string, now: number): { ok: true; speakerName: string; challengerName: string } | { ok: false; reason: string } {
-  const gate = canFactCheck(room, sessionId);
-  if (!gate.ok) return gate;
-  const speaker = activeSpeaker(room);
-  const challenger = room.participants.get(sessionId);
-  if (!speaker || !challenger) return { ok: false, reason: 'Nobody is speaking.' };
-  freezeClocks(room, now);
-  room.game.factCheckArmedBy = sessionId;
-  return { ok: true, speakerName: speaker.username, challengerName: challenger.username };
-}
-
-/** Picker closed with no challenge. The speaker's mic comes back. */
-export function disarmFactCheck(room: Room, sessionId: string, now: number): void {
-  if (room.game.factCheckArmedBy !== sessionId || room.game.activeFactCheckId) return;
-  room.game.factCheckArmedBy = null;
-  if (room.status === 'live' && room.game.paused && !room.game.buzz) unfreezeClocks(room, now);
-}
-
 /**
  * Validate and open a challenge. Consumes the challenger's attempt only after
  * every check passes. Freezes clocks the same way pause/buzz do, and does not
@@ -136,7 +117,8 @@ export function openFactCheck(room: Room, challengerSessionId: string, claimId: 
   if (!challenger || challenger.team === null) return { ok: false, reason: 'Join the room first.' };
 
   room.game.factCheckUsed.add(challengerSessionId);
-  room.game.factCheckArmedBy = null;
+  // The room is about to watch the jury; nobody else can open a check until it clears.
+  room.game.considering.clear();
   freezeClocks(room, now);
   const challenge: FactCheckChallenge = {
     id,
@@ -159,6 +141,8 @@ export function openFactCheck(room: Room, challengerSessionId: string, claimId: 
     outcome: null,
     juryPhase: 'independent',
     jury: null,
+    thread: [],
+    thinking: [],
     createdAt: now,
   };
   room.game.factChecks.push(challenge);
@@ -195,6 +179,7 @@ export function resolveFactCheck(room: Room, challengeId: string, result: FactCh
   challenge.unavailable = !!result.unavailable;
   challenge.jury = result.jury ?? null;
   challenge.juryPhase = null;
+  challenge.thinking = [];
   challenge.outcome = outcomeForVerdict(result.verdict, !!result.unavailable);
   return { ok: true, challenge };
 }
@@ -207,9 +192,42 @@ export function setJuryPhase(room: Room, challengeId: string, phase: JuryPhase):
   return true;
 }
 
-/** Host resumes. Refuses while the referee is still working, so the room can read the verdict. */
-export function dismissFactCheck(room: Room, now: number): { ok: true } | { ok: false; message: string } {
+/** Live conversation: which jurors are writing right now. */
+export function setJuryThinking(room: Room, challengeId: string, models: JuryModel[]): boolean {
+  const challenge = room.game.factChecks.find((f) => f.id === challengeId);
+  if (!challenge || challenge.status !== 'checking') return false;
+  challenge.thinking = [...models];
+  return true;
+}
+
+/** Live conversation: append one juror message and mark that juror as done writing. */
+export function addJuryMessage(room: Room, challengeId: string, message: JuryMessage): boolean {
+  const challenge = room.game.factChecks.find((f) => f.id === challengeId);
+  if (!challenge || challenge.status !== 'checking') return false;
+  challenge.thread.push(message);
+  challenge.thinking = challenge.thinking.filter((m) => m !== message.model);
+  return true;
+}
+
+/** Challenger opened or closed the claim picker. Only a label for the room; refused once they can't check. */
+export function setConsidering(room: Room, sessionId: string, on: boolean): boolean {
+  const had = room.game.considering.has(sessionId);
+  if (!on) {
+    room.game.considering.delete(sessionId);
+    return had;
+  }
+  if (had || !canFactCheck(room, sessionId).ok) return false;
+  room.game.considering.add(sessionId);
+  return true;
+}
+
+/**
+ * Resume after a verdict. Refuses while the referee is still working, so the room can read it.
+ * `onlyId` is for the automatic resume: it does nothing if the host already moved on.
+ */
+export function dismissFactCheck(room: Room, now: number, onlyId?: string): { ok: true } | { ok: false; message: string } {
   if (room.status !== 'live' || !room.game.activeFactCheckId) return { ok: false, message: 'There is no fact check to dismiss.' };
+  if (onlyId && room.game.activeFactCheckId !== onlyId) return { ok: false, message: 'That fact check already cleared.' };
   const challenge = room.game.factChecks.find((f) => f.id === room.game.activeFactCheckId);
   if (challenge?.status === 'checking') return { ok: false, message: 'The fact check is still running.' };
   room.game.activeFactCheckId = null;

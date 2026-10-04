@@ -7,7 +7,7 @@ const base = (props: SVGProps<SVGSVGElement>) => ({
   height: 20,
   fill: 'none',
   stroke: 'currentColor',
-  strokeWidth: 2,
+  strokeWidth: 1.5,
   strokeLinecap: 'round' as const,
   strokeLinejoin: 'round' as const,
   'aria-hidden': true,
@@ -36,3 +36,7 @@ export const VolumeIcon = (p: SVGProps<SVGSVGElement>) => <svg {...base(p)}><pat
 export const VolumeOffIcon = (p: SVGProps<SVGSVGElement>) => <svg {...base(p)}><path d="M4 9v6h4l5 4V5L8 9H4zM17 9l5 6M22 9l-5 6" /></svg>;
 export const HeadphonesIcon = (p: SVGProps<SVGSVGElement>) => <svg {...base(p)}><path d="M4 15v-3a8 8 0 0 1 16 0v3" /><rect x="3" y="14" width="4" height="7" rx="1.5" /><rect x="17" y="14" width="4" height="7" rx="1.5" /></svg>;
 export const CheckIcon = (p: SVGProps<SVGSVGElement>) => <svg {...base(p)}><path d="M5 12l5 5 9-10" /></svg>;
+export const InfoIcon = (p: SVGProps<SVGSVGElement>) => <svg {...base(p)}><circle cx="12" cy="12" r="9" /><path d="M12 11v5M12 7.5v.5" /></svg>;
+export const LockIcon = (p: SVGProps<SVGSVGElement>) => <svg {...base(p)}><rect x="5" y="11" width="14" height="10" rx="2" /><path d="M8 11V8a4 4 0 0 1 8 0v3" /></svg>;
+export const SpinnerIcon = (p: SVGProps<SVGSVGElement>) => <svg {...base(p)} className={`spinner ${p.className ?? ''}`}><path d="M12 3a9 9 0 1 0 9 9" /></svg>;
+export const ZapIcon = (p: SVGProps<SVGSVGElement>) => <svg {...base(p)}><path d="M13 3L4 14h7l-1 7 9-11h-7l1-7z" /></svg>;

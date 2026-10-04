@@ -1,20 +1,28 @@
-.timer { display: flex; flex-direction: column; align-items: center; gap: 2px; }
-.timer__label { font-size: 0.7rem; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; color: var(--text-faint); }
+.timer { display: flex; flex-direction: column; align-items: center; gap: var(--s1); }
+.timer__label { font-size: var(--fs-label); font-weight: 500; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-dim); }
 .timer__digits {
-  font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
-  font-weight: 800;
+  font-feature-settings: 'tnum';
+  font-weight: 600;
   letter-spacing: -0.02em;
   line-height: 1;
   color: var(--text);
-  transition: color var(--dur), text-shadow var(--dur);
 }
-.timer--lg .timer__digits { font-size: clamp(2.6rem, 5vw, 4.2rem); }
-.timer--md .timer__digits { font-size: clamp(2rem, 3.6vw, 3rem); }
-.timer--sm .timer__digits { font-size: 1.4rem; }
+.timer--lg .timer__digits { font-size: var(--fs-timer-lg); }
+.timer--sm .timer__digits { font-size: 1.25rem; }
+
+/* TimerPill: plain digits in a bordered pill. Label stays for screen readers only. */
+.timer--md .timer__label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.timer--md .timer__digits {
+  font-size: var(--fs-timer-md);
+  padding: 8px 18px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+  background: var(--bg);
+}
+
 .timer.is-stopped .timer__digits { color: var(--text-dim); }
-.timer--warn .timer__digits { color: var(--warn); text-shadow: 0 0 18px rgba(251, 191, 36, 0.35); }
-.timer--danger .timer__digits { color: #f87171; text-shadow: 0 0 22px rgba(239, 68, 68, 0.5); }
-.timer--danger.is-running .timer__digits { animation: timer-pulse 1s ease-in-out infinite; }
-@keyframes timer-pulse { 50% { transform: scale(1.06); opacity: 0.8; } }
-@media (prefers-reduced-motion: reduce) { .timer--danger.is-running .timer__digits { animation: none; } }
+.timer--warn .timer__digits, .timer--warn.is-stopped .timer__digits { color: var(--warn); }
+.timer--danger .timer__digits, .timer--danger.is-stopped .timer__digits { color: var(--danger); }
+.timer--md.timer--warn .timer__digits { border-color: var(--warn); }
+.timer--md.timer--danger .timer__digits { border-color: var(--danger); }

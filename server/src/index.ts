@@ -30,7 +30,7 @@ hub.onVoiceJoined((room, participantId) => void syncMicPermissions(room, new Set
 installGameTimers(hub);
 installGameHandlers(hub);
 const transcription = installTranscription(hub);
-installFactCheckHandlers(hub, transcription);
+installFactCheckHandlers(hub);
 hub.start();
 
 app.use('/api', healthRouter);
