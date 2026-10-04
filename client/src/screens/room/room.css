@@ -33,7 +33,7 @@
 .room__title { text-align: center; display: flex; flex-direction: column; align-items: center; gap: var(--s3); min-width: 0; }
 .room__topic {
   margin: 0;
-  font-size: var(--fs-display);
+  font-size: clamp(1.15rem, 1.6vw, 1.55rem);
   font-weight: 600;
   letter-spacing: -0.02em;
   line-height: 1.15;
@@ -76,7 +76,8 @@
 .team__title { display: flex; flex-direction: column; min-width: 0; flex: 1; }
 .team__name { margin: 0; font-size: 0.9375rem; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .team__count { font-size: var(--fs-label); color: var(--text-dim); font-variant-numeric: tabular-nums; }
-.team__score { flex: none; font-size: 1.25rem; font-weight: 600; letter-spacing: -0.01em; font-variant-numeric: tabular-nums; color: var(--text); }
+.team__score { flex: none; display: flex; align-items: baseline; gap: 4px; font-size: 1.75rem; font-weight: 700; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; color: var(--text); }
+.team__pts { font-size: 0.65rem; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-faint); }
 .team__letter { font-size: var(--fs-caption); font-weight: 500; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-faint); white-space: nowrap; }
 .team__seats { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
 .team__seats > li + li { border-top: 1px solid var(--border); }

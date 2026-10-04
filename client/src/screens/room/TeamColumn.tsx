@@ -24,7 +24,7 @@ export function TeamColumn({ team, snapshot, myId, canTakeSeat, onTakeSeat, onHo
           <h2 className="team__name">{snapshot.sides[team]}</h2>
           <span className="team__count">{speakers.length} / {max} seats</span>
         </div>
-        <span className="team__score" aria-label={`${snapshot.sides[team]} points`}>{snapshot.game.scores[team]}</span>
+        <span className="team__score" aria-label={`${snapshot.sides[team]} points`}>{snapshot.game.scores[team]}<span className="team__pts">pts</span></span>
       </header>
       <ol className="team__seats">
         {Array.from({ length: max }, (_, i) => i + 1).map((seat) => {

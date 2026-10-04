@@ -1,4 +1,5 @@
-.factcheck-btn svg { color: var(--warn); }
+.factcheck-btn { border-color: var(--danger); color: var(--danger); font-weight: 700; }
+.factcheck-btn svg { color: var(--danger); }
 .factcheck-btn.is-open { background: var(--surface-hover); border-color: var(--text-dim); }
 .factcheck-used { color: var(--text-faint); }
 

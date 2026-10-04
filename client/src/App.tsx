@@ -14,22 +14,23 @@ export function App() {
   const [editingName, setEditingName] = useState(false);
   const roomId = matchRoom(path);
 
-  let screen;
-  if (!hasName || editingName) {
-    // Entering a name is also the click that unlocks browser audio autoplay.
-    screen = <NameEntry onDone={() => { setHasName(true); setEditingName(false); }} />;
-  } else if (roomId) {
-    screen = <RoomScreen key={roomId} roomId={roomId} />;
-  } else if (path === '/history') {
-    screen = <History />;
-  } else {
-    screen = <Lobby onChangeName={() => setEditingName(true)} />;
-  }
+  const needName = !hasName || editingName;
+  const screen = roomId && hasName
+    ? <RoomScreen key={roomId} roomId={roomId} />
+    : path === '/history' && hasName
+      ? <History />
+      : <Lobby onChangeName={() => setEditingName(true)} />;
 
   return (
     <ToastProvider>
       <SecureContextBanner />
       {screen}
+      {needName && (
+        <NameEntry
+          onDone={() => { setHasName(true); setEditingName(false); }}
+          onCancel={hasName ? () => setEditingName(false) : undefined}
+        />
+      )}
     </ToastProvider>
   );
 }

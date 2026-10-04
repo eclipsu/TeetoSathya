@@ -22,6 +22,7 @@ export const config = {
   elevenLabsVoiceClaude: process.env.ELEVENLABS_VOICE_CLAUDE || 'EXAVITQu4vr4xnSDxMaL',
   /** Debate host who announces the motion at the start of a round (premade "Daniel"). */
   elevenLabsVoiceHost: process.env.ELEVENLABS_VOICE_HOST || 'onwK4e9ZLuTAKqWW03F9',
+  elevenLabsVoiceId: process.env.ELEVENLABS_VOICE_ID ?? '',
   geminiApiKey: process.env.GEMINI_API_KEY ?? '',
   geminiFactsKey: process.env.GEMINI_FACTS_KEY ?? '',
   /**

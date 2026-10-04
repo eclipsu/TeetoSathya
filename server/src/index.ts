@@ -4,6 +4,7 @@ import cors from 'cors';
 import { Server } from 'socket.io';
 import { config } from './config';
 import { healthRouter } from './http/health';
+import { welcomeRouter } from './http/welcome.routes';
 import { roomsRouter } from './http/rooms.routes';
 import { InMemoryRoomStore } from './store/InMemoryRoomStore';
 import { closeVoiceIfEnded, deleteVoiceRoom, forgetVoiceRoom, syncMicPermissions } from './voice/livekit';
@@ -40,6 +41,7 @@ installFactCheckHandlers(hub);
 hub.start();
 
 app.use('/api', healthRouter);
+app.use('/api', welcomeRouter);
 app.use('/api', livekitRouter(store));
 app.use('/api', roomsRouter({ store, closeRoom: (id, reason) => hub.closeRoom(id, reason) }));
 
