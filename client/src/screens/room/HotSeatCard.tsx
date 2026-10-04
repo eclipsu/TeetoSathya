@@ -80,7 +80,7 @@ export function HotSeatCard({ side, snapshot: s, now, myId, onDone, compact = fa
         ) : (
           <div className="hot__empty">
             <Avatar name={side === 0 ? 'Fox' : 'Panda'} size={56} variant="animal" />
-            <p className="muted">No speaker yet</p>
+            <p className="muted">Waiting for a speaker</p>
             <span className="hot__side"><span className="dot" />{s.sides[side]}</span>
           </div>
         )}
