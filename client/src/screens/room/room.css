@@ -20,13 +20,14 @@
 /* Header tile */
 .room__header {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 2.4fr) minmax(0, 1fr);
+  /* Right column sizes to its controls (voice dock grows when connected), so it never spills over the topic. */
+  grid-template-columns: minmax(0, 1fr) minmax(0, 2.4fr) auto;
   align-items: center;
   gap: var(--s4);
   padding: var(--s4) var(--s5);
 }
 .room__header-left, .room__header-right { display: flex; align-items: center; gap: var(--s2); min-width: 0; }
-.room__header-right { justify-content: flex-end; gap: var(--s1); }
+.room__header-right { justify-content: flex-end; gap: var(--s1); flex-wrap: wrap; row-gap: var(--s1); max-width: min(560px, 42vw); }
 .room__brand { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; min-width: 0; }
 .room__brand .brand { font-size: 1rem; }
 .room__view { font-size: var(--fs-caption); }
