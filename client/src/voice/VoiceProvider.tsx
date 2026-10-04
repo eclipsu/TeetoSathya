@@ -105,7 +105,7 @@ export function VoiceProvider({ roomId, holdMic = false, ended = false, onConnec
   const join = useCallback(async () => {
     if (roomRef.current || endedRef.current) return;
     const meters = (metersRef.current ??= new TrackMeters());
-    meters.ensureContext(); // still inside the click: lets the AudioContext start
+    meters.ensureContext();
     setStatus('connecting');
     setError(null);
     try {
@@ -230,6 +230,12 @@ export function VoiceProvider({ roomId, holdMic = false, ended = false, onConnec
         refreshMicState(room);
       });
   }, [canPublish, wantMic, holdMic, status, refreshMicState]);
+
+  // Voice connects as soon as the room opens. The mic follows once the server
+  // allows publishing. If the browser blocks playback, Enable audio stays available.
+  useEffect(() => {
+    if (!ended) void join();
+  }, [ended, join]);
 
   useEffect(() => () => leave(), [leave]);
 

@@ -249,7 +249,7 @@ export function RoomScreen({ roomId }: { roomId: string }) {
                 {snapshot.game.round > 0 && ` · Round ${snapshot.game.round}`}
               </span>
               <span className="room__listening">
-                Room {roomId.slice(0, 6).toUpperCase()} · {snapshot.participants.filter((p) => p.connected).length} listening · <ConnectionChip {...chip} />
+                {snapshot.participants.filter((p) => p.connected).length} listening · <ConnectionChip {...chip} />
               </span>
             </div>
           </div>

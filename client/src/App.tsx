@@ -3,7 +3,6 @@ import { SecureContextBanner } from './components/SecureContextBanner';
 import { ToastProvider } from './components/Toasts';
 import { matchRoom, usePath } from './lib/router';
 import { getSession } from './lib/session';
-import { History } from './screens/History';
 import { Lobby } from './screens/Lobby';
 import { NameEntry } from './screens/NameEntry';
 import { RoomScreen } from './screens/RoomScreen';
@@ -17,9 +16,7 @@ export function App() {
   const needName = !hasName || editingName;
   const screen = roomId && hasName
     ? <RoomScreen key={roomId} roomId={roomId} />
-    : path === '/history' && hasName
-      ? <History />
-      : <Lobby onChangeName={() => setEditingName(true)} />;
+    : <Lobby onChangeName={() => setEditingName(true)} />;
 
   return (
     <ToastProvider>

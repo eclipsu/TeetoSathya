@@ -3,12 +3,11 @@ import { APP_NAME, type RoomSummary } from '@teeto/shared';
 import { Avatar } from '../components/Avatar';
 import { ConfirmDialog } from '../components/Modal';
 import { useToast } from '../components/Toasts';
-import { ArrowRightIcon, CheckIcon, ClockIcon, EditIcon, EyeIcon, MicIcon, TrashIcon, UsersIcon } from '../components/icons';
+import { ArrowRightIcon, ClockIcon, EditIcon, EyeIcon, TrashIcon, UsersIcon } from '../components/icons';
 import { api } from '../lib/api';
 import { navigate } from '../lib/router';
 import { forgetHostToken, getHostToken, getSession } from '../lib/session';
 import { CreateRoomModal } from './CreateRoomModal';
-import { LiveDebatePreview } from './LiveDebatePreview';
 import './lobby.css';
 
 const POLL_MS = 3000;
@@ -25,9 +24,6 @@ export function Lobby({ onChangeName }: { onChangeName: () => void }) {
   const [creating, setCreating] = useState(false);
   const [toDelete, setToDelete] = useState<RoomSummary | null>(null);
   const [deleting, setDeleting] = useState(false);
-  const [code, setCode] = useState('');
-  const [joining, setJoining] = useState(false);
-
   const load = useCallback(async () => {
     try {
       setRooms(await api.listRooms());
@@ -67,8 +63,6 @@ export function Lobby({ onChangeName }: { onChangeName: () => void }) {
         <div className="frame">
         <a className="brand" href="/" onClick={(e) => { e.preventDefault(); navigate('/'); }}>{APP_NAME}</a>
         <nav className="topnav" aria-label="Page">
-          <button className="btn btn--ghost btn--sm" onClick={() => setJoining(true)}>Join</button>
-          <button className="btn btn--ghost btn--sm" onClick={() => navigate('/history')}>Past debates</button>
           <button className="user-chip" onClick={onChangeName} title="Change username">
             <Avatar name={session.username ?? '?'} size={24} />
             <span>{session.username}</span>
@@ -79,7 +73,7 @@ export function Lobby({ onChangeName }: { onChangeName: () => void }) {
         </div>
       </header>
 
-      <main className={`lobby ${rooms && rooms.length > 0 ? '' : 'lobby--center'}`}>
+      <main className="lobby lobby--center">
         <div className="land-split">
           <div className="land-copy">
             <section className="land" aria-label="What TeetoSathya is">
@@ -88,83 +82,85 @@ export function Lobby({ onChangeName }: { onChangeName: () => void }) {
               <p className="land__lead">A live team debate where factual claims can be challenged. Call a fact check while your opponent speaks. Gemini and Claude review the claim. A wrong claim scores +100. A claim that holds is −50.</p>
               <div className="land__actions">
                 <button className="btn btn--primary btn--lg" onClick={() => setCreating(true)}>Create room <ArrowRightIcon /></button>
-                <button type="button" className="btn btn--lg" onClick={() => setJoining((open) => !open)}>Join room</button>
               </div>
-              {joining && (
-                <form className="join-inline" onSubmit={(e) => { e.preventDefault(); const id = code.trim(); if (/^[a-z0-9]{4,16}$/i.test(id)) navigate(`/room/${id}`); }}>
-                  <label className="field">
-                    <span className="field__label">Room code</span>
-                    <input className="input" value={code} onChange={(e) => setCode(e.target.value)} placeholder="a7k2" autoCapitalize="none" spellCheck={false} autoFocus />
-                  </label>
-                  <button className="btn btn--primary" type="submit" disabled={!/^[a-z0-9]{4,16}$/i.test(code.trim())}>Join debate</button>
-                </form>
-              )}
-              <p className="land__note">No downloads. Create a room, invite both teams, and start debating.</p>
-            </section>
-            <section className="land-feats" aria-label="What you can do">
-              <article>
-                <MicIcon />
-                <h2>Live debate</h2>
-                <p>Timed turns. One speaker holds the floor.</p>
-              </article>
-              <article>
-                <CheckIcon />
-                <h2>Challenge facts</h2>
-                <p>Fact-check a claim while they speak.</p>
-              </article>
-              <article>
-                <span className="feat-pts" aria-hidden="true">+100</span>
-                <h2>Facts have stakes</h2>
-                <p>Win the challenge and your team scores.</p>
-              </article>
+              <ul className="land__stakes">
+                <li><strong>+100</strong><span>Wrong claim</span></li>
+                <li><strong>−50</strong><span>Claim holds</span></li>
+                <li><strong>0</strong><span>Split jury</span></li>
+              </ul>
             </section>
           </div>
-          <LiveDebatePreview />
-        </div>
 
-        {loadError && <p className="pill pill--danger" role="alert">{loadError}</p>}
-
-        {rooms && rooms.length > 0 && (
-        <>
-        <div className="lobby__head" id="rooms">
-          <h2>Open rooms</h2>
-          <span className="lobby__count">{rooms.length}</span>
+          <aside className="floor" aria-label="Open rooms">
+            <header className="floor__bar">
+              <h2>Open rooms</h2>
+              <span>{rooms && rooms.length > 0 ? rooms.length : 'Sample'}</span>
+            </header>
+            {loadError && <p className="pill pill--danger floor__error" role="alert">{loadError}</p>}
+            {rooms && rooms.length > 0 ? (
+              <div className="floor__rooms">
+                {rooms.map((r) => {
+                  const isHost = !!getHostToken(r.id);
+                  return (
+                    <article key={r.id} className="floor__room">
+                      <div className="floor__room-top">
+                        <span className={`status status--${r.status}`}>{r.status === 'live' ? 'Live' : r.status === 'lobby' ? 'Open' : 'Ended'}</span>
+                        {isHost && <span className="pill">You host</span>}
+                      </div>
+                      <h3>{r.topic}</h3>
+                      <div className="sides">
+                        <span className="side-pill"><span className="dot dot--a" /><span>{r.sides[0]}</span></span>
+                        <span className="side-pill"><span className="dot dot--b" /><span>{r.sides[1]}</span></span>
+                      </div>
+                      <dl className="floor__meta">
+                        <div><dt className="sr-only">Seats</dt><dd><UsersIcon /> {r.speakerCounts[0]}/{r.settings.speakersPerTeamMax} · {r.speakerCounts[1]}/{r.settings.speakersPerTeamMax}</dd></div>
+                        <div><dt className="sr-only">Spectators</dt><dd><EyeIcon /> {r.spectatorCount}</dd></div>
+                        <div><dt className="sr-only">Clock</dt><dd><ClockIcon /> {fmtMinutes(r.settings.turnSeconds)} · {fmtMinutes(r.settings.roundSeconds)}</dd></div>
+                      </dl>
+                      <div className="floor__room-actions">
+                        {isHost && (
+                          <button className="btn btn--ghost btn--sm" onClick={() => setToDelete(r)} aria-label={`Delete room ${r.topic}`}>
+                            <TrashIcon /> Delete
+                          </button>
+                        )}
+                        <button className="btn btn--primary btn--sm" onClick={() => navigate(`/room/${r.id}`)} disabled={r.status === 'ended'}>
+                          Join <ArrowRightIcon />
+                        </button>
+                      </div>
+                    </article>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="floor__body">
+                <h3 className="floor__topic">Where do people do their best work?</h3>
+                <div className="floor__teams">
+                  <div className="floor__team">
+                    <span className="floor__side"><span className="dot dot--a" /> Home</span>
+                    <div className="floor__faces">
+                      <Avatar name="Maya" size={36} />
+                      <Avatar name="Ari" size={36} />
+                    </div>
+                    <span className="floor__who">Maya · Ari</span>
+                  </div>
+                  <div className="floor__team">
+                    <span className="floor__side"><span className="dot dot--b" /> Office</span>
+                    <div className="floor__faces">
+                      <Avatar name="Leo" size={36} />
+                      <Avatar name="Noor" size={36} />
+                    </div>
+                    <span className="floor__who">Leo · Noor</span>
+                  </div>
+                </div>
+                <ul className="floor__stats">
+                  <li><span>Turn</span><strong>2 min</strong></li>
+                  <li><span>Round</span><strong>10 min</strong></li>
+                  <li><span>Watching</span><strong>2</strong></li>
+                </ul>
+              </div>
+            )}
+          </aside>
         </div>
-        <div className="room-grid">
-          {rooms.map((r) => {
-            const isHost = !!getHostToken(r.id);
-            return (
-              <article key={r.id} className="room-card">
-                <div className="room-card__top">
-                  <span className={`status status--${r.status}`}>{r.status === 'live' ? 'Live' : r.status === 'lobby' ? 'Open' : 'Ended'}</span>
-                  {isHost && <span className="pill">You host</span>}
-                </div>
-                <h2 className="room-card__topic">{r.topic}</h2>
-                <div className="sides">
-                  <span className="side-pill"><span className="dot dot--a" /><span>{r.sides[0]}</span></span>
-                  <span className="side-pill"><span className="dot dot--b" /><span>{r.sides[1]}</span></span>
-                </div>
-                <dl className="room-card__meta">
-                  <div><dt className="sr-only">Seats</dt><dd><UsersIcon /> {r.speakerCounts[0]} / {r.settings.speakersPerTeamMax} · {r.speakerCounts[1]} / {r.settings.speakersPerTeamMax}</dd></div>
-                  <div><dt className="sr-only">Spectators</dt><dd><EyeIcon /> {r.spectatorCount} watching</dd></div>
-                  <div><dt className="sr-only">Clock</dt><dd><ClockIcon /> {fmtMinutes(r.settings.turnSeconds)} each · {fmtMinutes(r.settings.roundSeconds)} round</dd></div>
-                </dl>
-                <div className="room-card__actions">
-                  {isHost && (
-                    <button className="btn btn--ghost btn--sm" onClick={() => setToDelete(r)} aria-label={`Delete room ${r.topic}`}>
-                      <TrashIcon /> Delete
-                    </button>
-                  )}
-                  <button className="btn btn--primary btn--sm" onClick={() => navigate(`/room/${r.id}`)} disabled={r.status === 'ended'}>
-                    Join <ArrowRightIcon />
-                  </button>
-                </div>
-              </article>
-            );
-          })}
-        </div>
-        </>
-        )}
 
         <footer className="powered">
           <p>Powered by</p>

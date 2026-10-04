@@ -1,16 +1,13 @@
-import { useState } from 'react';
 import { ConnectionChip } from '../components/ConnectionChip';
-import { HeadphonesIcon, MicIcon, MicOffIcon, VolumeIcon, VolumeOffIcon } from '../components/icons';
+import { MicIcon, MicOffIcon, VolumeIcon, VolumeOffIcon } from '../components/icons';
 import { LevelMeter } from './LevelMeter';
 import { MIC_HELP, useMicLevel } from './useMicLevel';
 import { useVoice } from './VoiceProvider';
-import { VoiceJoinDialog } from './VoiceJoinDialog';
 import './voice.css';
 
-/** Header controls: Join voice, mic toggle (speakers), own level meter, master volume, status. */
+/** Header controls: mic toggle (speakers), own level meter, master volume, status. */
 export function VoiceDock({ isSpeaker, micReason }: { isSpeaker: boolean; micReason: string | null }) {
   const v = useVoice();
-  const [dialog, setDialog] = useState(false);
   const myLevel = useMicLevel(v.localMicTrack);
 
   if (v.closed) {
@@ -21,22 +18,10 @@ export function VoiceDock({ isSpeaker, micReason }: { isSpeaker: boolean; micRea
     );
   }
 
-  if (v.status === 'idle' || v.status === 'error') {
-    return (
-      <div className="voice-dock">
-        {v.status === 'error' && <ConnectionChip state="bad" label="Voice failed" />}
-        <button className="btn btn--primary btn--sm" onClick={() => setDialog(true)}>
-          <HeadphonesIcon width={16} height={16} /> <span className="btn__label">{v.status === 'error' ? 'Retry voice' : 'Join voice'}</span>
-        </button>
-        {v.error && <span className="sr-only" role="alert">{v.error}</span>}
-        <VoiceJoinDialog open={dialog} isSpeaker={isSpeaker} onClose={() => setDialog(false)} onJoin={() => { setDialog(false); void v.join(); }} />
-      </div>
-    );
-  }
-
   const chip =
     v.status === 'connected' ? { state: 'ok' as const, label: 'Voice' } :
     v.status === 'reconnecting' ? { state: 'warn' as const, label: 'Reconnecting…' } :
+    v.status === 'error' ? { state: 'bad' as const, label: 'Voice failed' } :
     { state: 'idle' as const, label: 'Joining…' };
 
   const micTitle = !v.canPublish ? micReason ?? 'Mic closed' : v.wantMic ? 'Mute mic' : 'Unmute mic';
@@ -44,6 +29,10 @@ export function VoiceDock({ isSpeaker, micReason }: { isSpeaker: boolean; micRea
   return (
     <div className="voice-dock">
       <ConnectionChip {...chip} />
+      {v.status === 'error' && (
+        <button className="btn btn--primary btn--sm" onClick={() => void v.join()}>Retry</button>
+      )}
+      {v.error && <span className="sr-only" role="alert">{v.error}</span>}
       {v.audioBlocked && (
         <button className="btn btn--sm btn--danger" onClick={v.unlockAudio}>Enable audio</button>
       )}

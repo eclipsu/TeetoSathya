@@ -9,7 +9,7 @@ export class TrackMeters {
   private ctx: AudioContext | null = null;
   private meters = new Map<string, { src: MediaStreamAudioSourceNode; analyser: AnalyserNode; buf: Float32Array<ArrayBuffer> }>();
 
-  /** Must be called from a user gesture (the "Join voice" click) so the context may start. */
+  /** Starts the AudioContext. Autoplay rules may leave it suspended until Enable audio. */
   ensureContext(): AudioContext {
     if (!this.ctx) this.ctx = new AudioContext();
     void this.ctx.resume().catch(() => {});
