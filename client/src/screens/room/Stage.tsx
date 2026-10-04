@@ -5,7 +5,7 @@ import { PlayIcon } from '../../components/icons';
 import { Timer } from '../../components/Timer';
 import { playWhoosh } from '../../lib/sfx';
 import { roundRemaining, useServerNow } from '../../state/clock';
-import { ChallengeCard } from './FactCheck';
+import { ChallengeCard, type TiebreakControls } from './FactCheck';
 import { HotSeatCard } from './HotSeatCard';
 
 interface Props {
@@ -22,6 +22,7 @@ interface Props {
   picker?: ReactNode;
   /** Jury message being read aloud right now. */
   speakingId?: string | null;
+  tiebreak?: TiebreakControls;
 }
 
 type Center =
@@ -53,7 +54,7 @@ function useLinger(center: Center | null): { shown: Center | null; leaving: bool
 }
 
 /** Center stage: round timer, two hot seats, and the challenge card that slides up between them. */
-export function Stage({ snapshot: s, myId, isHost, onDone, onStart, starting = false, interimText, transcriptionAvailable, picker, speakingId = null }: Props) {
+export function Stage({ snapshot: s, myId, isHost, onDone, onStart, starting = false, interimText, transcriptionAvailable, picker, speakingId = null, tiebreak }: Props) {
   const live = s.status === 'live';
   const now = useServerNow(live);
   const g = s.game;
@@ -93,7 +94,7 @@ export function Stage({ snapshot: s, myId, isHost, onDone, onStart, starting = f
   const roundName = `Round ${g.round || 1}${total > 1 ? ` of ${total}` : ''}`;
   const roundLabel = !live
     ? `${total} round${total === 1 ? '' : 's'}`
-    : `${roundName} · ${g.intermission ? 'Over' : g.intro ? 'Opening' : g.factCheck ? 'Fact check' : g.buzz ? 'Buzz' : g.paused ? 'Paused' : 'Live'}`;
+    : g.intermission ? 'Round over' : g.intro ? 'Opening' : g.factCheck ? 'Fact check' : g.buzz ? 'Buzz' : g.paused ? 'Paused' : 'Live';
   const im = g.intermission;
   const breakMs = im ? im.until - now : null;
   const breakSeconds = breakMs !== null && breakMs > 0 ? Math.ceil(breakMs / 1000) : null;
@@ -105,8 +106,15 @@ export function Stage({ snapshot: s, myId, isHost, onDone, onStart, starting = f
   return (
     <section className={`stage ${live ? 'stage--live' : ''} ${challenging ? 'stage--challenge' : ''}`} aria-label="Stage">
       <div className="stage__round">
+        {live && (
+          <p className="stage__roundname" aria-label={roundName}>
+            <span className="stage__roundname-label">Round</span>
+            <span className="stage__roundname-num">{g.round || 1}</span>
+            {total > 1 && <span className="stage__roundname-of">/ {total}</span>}
+          </p>
+        )}
         <Timer ms={roundMs} running={runningRound} label={roundLabel} size="lg" warn={live} />
-        {live && interimText && (!challenging || center?.kind === 'pick') && <p className="transcript-live">“{interimText}”</p>}
+        {live && (!challenging || center?.kind === 'pick') && <LiveTranscript text={interimText} />}
         {live && (g.scores[0] > 0 || g.scores[1] > 0) && (
           <p className="stage__score" aria-label={`${s.sides[0]} ${g.scores[0]}, ${s.sides[1]} ${g.scores[1]}`}>
             <span className="dot dot--a" />{s.sides[0]} <strong>{g.scores[0]}</strong>
@@ -155,7 +163,7 @@ export function Stage({ snapshot: s, myId, isHost, onDone, onStart, starting = f
           {shown && (
             <div className="stage__center-inner" key={shown.key}>
               {shown.kind === 'fact'
-                ? <ChallengeCard check={shown.check} speakingId={speakingId} />
+                ? <ChallengeCard check={shown.check} speakingId={speakingId} tiebreak={tiebreak} />
                 : shown.kind === 'pick'
                   ? shown.node
                   : <BuzzCard buzz={shown.buzz} challenged={shown.challenged} team={shown.team} />}
@@ -182,6 +190,27 @@ export function Stage({ snapshot: s, myId, isHost, onDone, onStart, starting = f
         </div>
       )}
     </section>
+  );
+}
+
+/** Keep the last words up briefly after the server clears them, so the gap between sentences doesn't blink. */
+const TRANSCRIPT_HOLD_MS = 1200;
+
+/**
+ * The speaker's words as they talk. Always takes the same two lines of space and fades instead of
+ * mounting/unmounting, so nothing on the stage jumps while transcription comes and goes.
+ */
+function LiveTranscript({ text }: { text: string | null }) {
+  const [shown, setShown] = useState(text);
+  useEffect(() => {
+    if (text) return setShown(text);
+    const t = setTimeout(() => setShown(null), TRANSCRIPT_HOLD_MS);
+    return () => clearTimeout(t);
+  }, [text]);
+  return (
+    <p className={`transcript-live ${shown ? 'is-on' : ''}`} aria-live="off">
+      <span className="transcript-live__text">{shown ? `“${shown}”` : '\u00a0'}</span>
+    </p>
   );
 }
 

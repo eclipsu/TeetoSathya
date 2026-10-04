@@ -305,3 +305,37 @@ button.seat__open:hover .seat__take, button.seat__open:focus-visible .seat__take
 .summary__round-num { grid-row: span 2; font-size: var(--fs-label); font-weight: 600; color: var(--text-dim); }
 .summary__round-claim { font-weight: 500; overflow-wrap: anywhere; }
 .summary__round-meta { font-size: var(--fs-label); color: var(--text-dim); }
+
+/* End-of-game jury review: each side's players, their numbers, and what the jurors said */
+.review { margin-bottom: var(--s5); }
+.review__head { display: flex; align-items: center; justify-content: space-between; gap: var(--s3); margin-bottom: var(--s3); }
+.review__title { margin: 0; font-size: var(--fs-label); font-weight: 500; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-dim); }
+.review__status { font-size: var(--fs-caption); color: var(--text-faint); }
+.review__status--writing, .review__status--speaking { color: var(--text-dim); }
+.review__teams { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--s4); align-items: start; }
+.review__team { border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg); overflow: hidden; }
+.review__side { display: flex; align-items: center; gap: var(--s2); margin: 0; padding: var(--s3) var(--s4); font-size: 0.875rem; font-weight: 600; border-bottom: 1px solid var(--border); }
+.review__side .dot { width: 6px; height: 6px; }
+.review__players { list-style: none; margin: 0; padding: 0; }
+.rplayer { display: grid; gap: var(--s2); padding: var(--s3) var(--s4); transition: background var(--dur) var(--ease); animation: fade-in var(--dur) var(--ease); }
+.rplayer + .rplayer { border-top: 1px solid var(--border); }
+.rplayer.is-speaking { background: var(--surface); }
+.rplayer__top { display: flex; align-items: center; gap: var(--s2); min-width: 0; }
+.rplayer__name { font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rplayer__out { margin-left: auto; flex: none; padding: 0 8px; border-radius: var(--radius-pill); border: 1px solid var(--danger); color: var(--danger); font-size: var(--fs-caption); font-weight: 500; }
+.rplayer__stats { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: var(--s2); }
+.rstat { display: inline-flex; align-items: baseline; gap: 5px; padding: 3px 8px; border-radius: var(--radius-sm); background: var(--surface-raised); white-space: nowrap; }
+.rstat__value { font-size: 0.8125rem; font-weight: 600; font-variant-numeric: tabular-nums; }
+.rstat__label { font-size: var(--fs-caption); color: var(--text-dim); }
+.rstat--up .rstat__value { color: var(--ok); }
+.rstat--down .rstat__value { color: var(--danger); }
+.rplayer__lean { margin: 0; font-size: 0.8125rem; color: var(--text-dim); overflow-wrap: anywhere; }
+.rplayer__lean q { color: var(--text); quotes: '“' '”'; }
+.rplayer__said { display: flex; align-items: flex-start; gap: var(--s2); margin: 0; padding: var(--s2) var(--s3); border-radius: var(--radius-sm); border: 1px solid var(--border); background: var(--surface); font-size: 0.875rem; line-height: 1.45; animation: msg-in 260ms var(--ease); }
+.rplayer__said .juror-mark { margin-top: 1px; font-size: 0.6875rem; }
+.rplayer__said.is-speaking { border-color: var(--text-dim); }
+.rplayer__said-text { min-width: 0; overflow-wrap: anywhere; }
+.rplayer__typing { justify-self: start; padding-left: 2px; }
+.review__verdict { display: flex; align-items: center; justify-content: center; gap: var(--s2); margin: var(--s4) 0 0; padding: var(--s3) var(--s4); border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); font-size: 1rem; font-weight: 600; text-align: center; animation: msg-in 260ms var(--ease); }
+.review__verdict.is-speaking { border-color: var(--text-dim); }
+@media (max-width: 800px) { .review__teams { grid-template-columns: minmax(0, 1fr); } }

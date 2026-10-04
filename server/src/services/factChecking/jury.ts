@@ -133,6 +133,7 @@ function round1ToVote(analysis: Round1Analysis): JuryVote {
     changedVote: false,
     reasoning: analysis.reasoning,
     spoken: analysis.spoken,
+    sources: analysis.sources,
     limitations: analysis.limitations,
     responseToOthers: 'No other juror is seated.',
   };
@@ -181,6 +182,7 @@ export async function runJury(claimId: string, claim: string, topic: string, lis
         verdict: analysis.verdict,
         confidence: analysis.confidence,
         text: detailed ? capWords(analysis.reasoning, DETAILED_WORDS) : analysis.spoken,
+        sources: analysis.sources,
         changedVote: false,
       }));
       return analysis;
@@ -211,6 +213,7 @@ export async function runJury(claimId: string, claim: string, topic: string, lis
           text: detailed
             ? capWords(vote.responseToOthers || vote.reasoning, DETAILED_WORDS)
             : vote.spoken || spokenLine(undefined, vote.responseToOthers || vote.reasoning),
+          sources: vote.sources ?? [],
           changedVote: vote.changedVote,
         }));
         return vote;

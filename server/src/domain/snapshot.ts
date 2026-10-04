@@ -10,6 +10,7 @@ function toFactCheckView(f: FactCheckChallenge): FactCheckView {
     speakerName: f.speakerName,
     claim: f.claim,
     status: f.status,
+    decidedByHost: f.decidedByHost,
     verdict: f.verdict,
     outcome: f.outcome,
     explanation: f.explanation,
@@ -66,6 +67,7 @@ export function toSnapshot(room: Room, now: number): RoomSnapshot {
       ? { until: g.intermission.until, nextRound: g.intermission.nextRound, openingSide: g.intermission.openingSide, openerId: idOf(g.intermission.openerSessionId), endedBy: g.intermission.endedBy, outTeam: g.intermission.outTeam }
       : null,
     roundLog: g.roundLog.map((r) => ({ ...r })),
+    review: g.review ? { status: g.review.status, players: g.review.players, lines: g.review.lines } : null,
     winner: room.status === 'ended' ? g.winner : null,
   };
   return { id: room.id, topic: room.topic, sides: room.sides, status: room.status, settings: room.settings, participants, game, serverNow: now };

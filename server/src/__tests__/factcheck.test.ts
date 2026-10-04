@@ -14,6 +14,8 @@ import {
   openFactCheck,
   resolveFactCheck,
   setConsidering,
+  openTiebreak,
+  breakTie,
   CLAIM_BUFFER_SIZE,
   setJuryThinking,
 } from '../domain/factcheck';
@@ -252,7 +254,7 @@ describe('jury conversation', () => {
     addClaim(room, room.hostSessionId, 0, 'c1', 'Water boils at 90C at sea level.');
     expect(openFactCheck(room, 'sess-b1-00001', 'c1', T0 + 1000, 'fc1').ok).toBe(true);
     expect(setJuryThinking(room, 'fc1', ['gemini', 'claude'])).toBe(true);
-    const msg = { stage: 'opening' as const, verdict: 'INCORRECT' as const, confidence: 0.9, text: 'It boils at 100C.', changedVote: false, at: T0 + 2000, audioMs: null };
+    const msg = { stage: 'opening' as const, verdict: 'INCORRECT' as const, confidence: 0.9, text: 'It boils at 100C.', changedVote: false, at: T0 + 2000, audioMs: null, sources: [] };
     addJuryMessage(room, 'fc1', { ...msg, id: 'm1', model: 'claude' });
     const fc = room.game.factChecks[0]!;
     expect(fc.thread.map((m) => m.model)).toEqual(['claude']);
@@ -451,5 +453,59 @@ describe('rounds: knock-outs, breaks, alternating openers', () => {
     const room = liveRoom();
     room.game.openedBy.add('sess-b1-00001');
     for (let i = 0; i < 10; i++) expect(game.pickOpener(room, 1)?.sessionId).toBe('sess-b2-00001');
+  });
+});
+
+describe('end-of-game review stats', () => {
+  it('counts claims, accuracy, challenges, knock-outs and what each speaker leaned on', async () => {
+    const { playerStats } = await import('../domain/review');
+    const room = liveRoom();
+    mergeClaims(room, [{ id: 'k1', text: 'Sydney is the capital of Australia.', originalText: 'x', speakerSessionId: room.hostSessionId, team: 0, createdAt: 1, relevance: 0.9 }], 1);
+    mergeClaims(room, [{ id: 'k2', text: 'Australia has six states.', originalText: 'x', speakerSessionId: room.hostSessionId, team: 0, createdAt: 2, relevance: 0.95 }], 2);
+    openFactCheck(room, 'sess-b1-00001', 'k1', T0 + 1000, 'fc1');
+    resolveFactCheck(room, 'fc1', { verdict: 'INCORRECT', confidence: 0.95, explanation: 'No.' });
+    const stats = playerStats(room);
+    const host = stats.find((p) => p.name === 'Host')!;
+    const b1 = stats.find((p) => p.name === 'B1')!;
+    expect(host).toMatchObject({ claims: 2, checked: 1, stood: 0, outs: 1, leanedOn: 'Sydney is the capital of Australia.' });
+    expect(b1).toMatchObject({ challenges: 1, landed: 1, points: 100 });
+    expect(stats.some((p) => p.name === 'Spec')).toBe(false); // spectators aren't reviewed
+  });
+
+  it('the spoken result always matches the real score', async () => {
+    const { resultLine } = await import('../services/reviewer');
+    const sides: [string, string] = ['Yes', 'No'];
+    expect(resultLine({ topic: 't', sides, scores: [50, 200], winner: 1 })).toBe('No wins, 200 to 50.');
+    expect(resultLine({ topic: 't', sides, scores: [100, 100], winner: null })).toMatch(/tied at 100 to 100/);
+  });
+});
+
+describe('jury tie-break', () => {
+  const split = { claimId: 'c1', claim: 'x', verdict: null, votesForCorrect: 1, votesForIncorrect: 1, juryConfidence: 0, unanimous: false, offTopic: false, votes: [], completedAt: 1 };
+
+  it('a split jury opens a tie-break: everyone may talk, the host decides, then scoring and knock-outs apply', () => {
+    const room = liveRoom();
+    addClaim(room, room.hostSessionId, 0, 'c1', 'Copenhagen has more bicycles than cars.');
+    openFactCheck(room, 'sess-b1-00001', 'c1', T0 + 1000, 'fc1');
+    expect(openTiebreak(room, 'fc1', split)).toBe(true);
+    expect(room.game.paused).toBe(true);
+    for (const p of room.participants.values()) expect(canPublish(room, p)).toBe(true); // spectators too
+    expect(dismissFactCheck(room, T0 + 2000).ok).toBe(false);
+    const res = breakTie(room, 'INCORRECT', T0 + 3000);
+    expect(res.ok && res.challenge.decidedByHost).toBe(true);
+    expect(room.game.scores).toEqual([0, 100]);
+    expect(room.game.eliminated.has(room.hostSessionId)).toBe(true);
+    expect(room.game.factCheckResumeAt).toBe(T0 + 3000 + FACT_CHECK_RESUME_MS);
+    expect(canPublish(room, room.participants.get('sess-spec-0001')!)).toBe(false);
+  });
+
+  it('the host ruling the claim stands costs the challenger', () => {
+    const room = liveRoom();
+    addClaim(room, room.hostSessionId, 0, 'c1', 'Copenhagen has more bicycles than cars.');
+    openFactCheck(room, 'sess-b1-00001', 'c1', T0 + 1000, 'fc1');
+    openTiebreak(room, 'fc1', split);
+    breakTie(room, 'CORRECT', T0 + 2000);
+    expect(room.game.scores).toEqual([0, -50]);
+    expect(room.game.eliminated.size).toBe(0);
   });
 });

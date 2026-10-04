@@ -27,6 +27,43 @@ export interface RoundLogEntry {
   outTeam: TeamIndex | null;
 }
 
+/** One speaker's game, for the end-of-game review. */
+export interface PlayerReview {
+  id: string;
+  name: string;
+  team: TeamIndex;
+  /** Claims picked up from their speech, all rounds. */
+  claims: number;
+  /** Their claims that were fact-checked, and how many of those held up. */
+  checked: number;
+  stood: number;
+  /** Fact checks they called, and how many landed. */
+  challenges: number;
+  landed: number;
+  /** Times a landed challenge knocked them out. */
+  outs: number;
+  /** Points their challenges won or lost. */
+  points: number;
+  talkMs: number;
+  /** The claim they leaned on most (highest relevance, or their round claim). */
+  leanedOn: string | null;
+}
+
+/** A spoken line of the end-of-game review. Jurors alternate. */
+export interface ReviewLine {
+  id: string;
+  model: JuryModel;
+  text: string;
+  audioMs: number | null;
+}
+
+export interface GameReview {
+  /** 'writing' while the jurors prepare it; lines then arrive one by one as they are spoken. */
+  status: 'writing' | 'speaking' | 'done';
+  players: PlayerReview[];
+  lines: ReviewLine[];
+}
+
 /** Between rounds: clocks are frozen and the next opener is already chosen. */
 export interface IntermissionView {
   until: number;
@@ -126,6 +163,7 @@ export interface JuryVote {
   responseToOthers: string;
   /** Short line said to the room. Falls back to the reasoning's first sentence. */
   spoken?: string;
+  sources?: string[];
 }
 
 /** Deterministic tally of the seated jurors' final votes. No model decides this. */
@@ -160,6 +198,8 @@ export interface JuryMessage {
   at: number;
   /** Length of the spoken audio, so the text types out in step with it. Null when there is no audio. */
   audioMs: number | null;
+  /** Sources the juror relied on, named from its own knowledge (no links). */
+  sources: string[];
 }
 
 /** One challengeable claim offered to the challenger. Not a fact-check result. */
@@ -177,7 +217,10 @@ export interface FactCheckView {
   speakerId: string;
   speakerName: string;
   claim: string;
-  status: 'checking' | 'resolved';
+  /** 'tiebreak': the jurors split; everyone may hold P to argue and the host decides. */
+  status: 'checking' | 'tiebreak' | 'resolved';
+  /** The host broke a jury tie. */
+  decidedByHost: boolean;
   verdict: FactVerdict | null;
   outcome: FactCheckOutcome | null;
   explanation: string | null;
@@ -232,6 +275,8 @@ export interface GameView {
   intermission: IntermissionView | null;
   /** Finished rounds, oldest first. */
   roundLog: RoundLogEntry[];
+  /** End-of-game performance review. Null until the game ends. */
+  review: GameReview | null;
   /** Set once the round has ended and a winner is known. Null while live, or on a tie until the host picks. */
   winner: import('./score').RoundWinner | null;
 }

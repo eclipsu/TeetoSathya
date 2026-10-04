@@ -14,6 +14,7 @@ import { installGameHandlers } from './socket/gameHandlers';
 import { installFactCheckHandlers } from './socket/factcheckHandlers';
 import { installGameTimers } from './engine/gameTimers';
 import { installRoundFlow } from './engine/roundFlow';
+import { installGameReview } from './engine/gameReview';
 import { installTranscription } from './services/transcription';
 import { connectHostedSpacetime } from './spacetime/hosted';
 
@@ -35,6 +36,7 @@ hub.onRoomChange((room) => {
 hub.onVoiceJoined((room, participantId) => void syncMicPermissions(room, new Set([participantId])));
 installGameTimers(hub);
 installRoundFlow(hub);
+installGameReview(hub);
 installGameHandlers(hub);
 const transcription = installTranscription(hub);
 installFactCheckHandlers(hub);

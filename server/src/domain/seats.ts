@@ -3,7 +3,7 @@ import type { Participant, Room } from './model';
 
 export type SetRoleResult =
   | { ok: true; changed: boolean; vacatedHotSeat: TeamIndex | null }
-  | { ok: false; code: 'not_joined' | 'team_full' | 'host_must_speak' | 'bad_request' | 'invalid_state'; message: string };
+  | { ok: false; code: 'not_joined' | 'team_full' | 'bad_request' | 'invalid_state'; message: string };
 
 export function speakersOnTeam(room: Room, team: TeamIndex): Participant[] {
   return [...room.participants.values()]
@@ -28,9 +28,6 @@ export function setRole(room: Room, sessionId: string, role: Role, team: TeamInd
   if (role !== 'speaker' && role !== 'spectator') return { ok: false, code: 'bad_request', message: 'Unknown role.' };
 
   if (role === 'spectator') {
-    if (sessionId === room.hostSessionId) {
-      return { ok: false, code: 'host_must_speak', message: 'The host plays on a team, so they must join as a speaker.' };
-    }
     if (p.role === 'spectator') return { ok: true, changed: false, vacatedHotSeat: null };
     const vacated = vacateHotSeat(room, sessionId);
     p.role = 'spectator';

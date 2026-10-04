@@ -48,12 +48,11 @@ describe('seat limits', () => {
     expect([p.team, p.seatOrder]).toEqual([1, 1]);
   });
 
-  it('host must be a speaker', () => {
+  it('the host may sit out the teams as a neutral moderator', () => {
     const room = makeRoom();
     join(room, room.hostSessionId, 'Host');
-    const r = setRole(room, room.hostSessionId, 'spectator', null);
-    expect(r.ok).toBe(false);
-    if (!r.ok) expect(r.code).toBe('host_must_speak');
+    expect(setRole(room, room.hostSessionId, 'spectator', null).ok).toBe(true);
+    expect(room.participants.get(room.hostSessionId)?.role).toBe('spectator');
   });
 
   it('leaving the team vacates the hot seat', () => {

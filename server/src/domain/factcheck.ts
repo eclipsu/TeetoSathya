@@ -210,6 +210,7 @@ export function openFactCheck(room: Room, challengerSessionId: string, claimId: 
     thinking: [],
     createdAt: now,
     scoreDelta: null,
+    decidedByHost: false,
   };
   room.game.factChecks.push(challenge);
   room.game.activeFactCheckId = id;
@@ -236,7 +237,7 @@ export function outcomeForVerdict(verdict: FactVerdict, unavailable = false): Fa
 export function resolveFactCheck(room: Room, challengeId: string, result: FactCheckResolution): { ok: true; challenge: FactCheckChallenge } | { ok: false; reason: string } {
   const challenge = room.game.factChecks.find((f) => f.id === challengeId);
   if (!challenge) return { ok: false, reason: 'That fact check no longer exists.' };
-  if (challenge.status !== 'checking') return { ok: false, reason: 'That fact check already finished.' };
+  if (challenge.status === 'resolved') return { ok: false, reason: 'That fact check already finished.' };
   if (challenge.roundSeq !== room.game.roundSeq && room.status === 'live') return { ok: false, reason: 'That fact check was from another round.' };
   challenge.status = 'resolved';
   challenge.verdict = result.verdict;
@@ -254,6 +255,32 @@ export function resolveFactCheck(room: Room, challengeId: string, result: FactCh
   if (challenge.outcome === 'successful') room.game.eliminated.add(challenge.speakerSessionId);
   room.game.factCheckResumeAt = null;
   return { ok: true, challenge };
+}
+
+/**
+ * The jurors split: hold the verdict, keep the clocks frozen, and let the room argue (hold P) until
+ * the host decides. Transcription stays off because the clocks are frozen.
+ */
+export function openTiebreak(room: Room, challengeId: string, jury: JuryResult): boolean {
+  const challenge = room.game.factChecks.find((f) => f.id === challengeId);
+  if (!challenge || challenge.status !== 'checking') return false;
+  challenge.status = 'tiebreak';
+  challenge.jury = jury;
+  challenge.juryPhase = null;
+  challenge.thinking = [];
+  challenge.explanation = 'The jurors split.';
+  return true;
+}
+
+/** Host decides a split jury. Scores and knock-outs apply as for any verdict, then the usual countdown. */
+export function breakTie(room: Room, verdict: 'CORRECT' | 'INCORRECT', now: number): { ok: true; challenge: FactCheckChallenge } | { ok: false; reason: string } {
+  const challenge = room.game.factChecks.find((f) => f.id === room.game.activeFactCheckId);
+  if (!challenge || challenge.status !== 'tiebreak') return { ok: false, reason: 'There is no jury tie to break.' };
+  const res = resolveFactCheck(room, challenge.id, { verdict, confidence: 1, explanation: 'The host broke the tie.', jury: challenge.jury });
+  if (!res.ok) return res;
+  res.challenge.decidedByHost = true;
+  beginFactCheckCountdown(room, now);
+  return res;
 }
 
 /** Verdict is on screen. Clocks stay frozen until this moment, then resume on their own. */
@@ -309,6 +336,7 @@ export function dismissFactCheck(room: Room, now: number): { ok: true; toasts: G
   if (room.status !== 'live' || !room.game.activeFactCheckId) return { ok: false, message: 'There is no fact check to dismiss.' };
   const challenge = room.game.factChecks.find((f) => f.id === room.game.activeFactCheckId);
   if (challenge?.status === 'checking') return { ok: false, message: 'The fact check is still running.' };
+  if (challenge?.status === 'tiebreak') return { ok: false, message: 'The jury split: decide the claim first.' };
   room.game.factCheckResumeAt = null;
   room.game.activeFactCheckId = null;
   const out = replaceEliminated(room, now);

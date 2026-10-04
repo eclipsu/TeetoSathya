@@ -1,4 +1,4 @@
-import type { RoundEnd, RoundLogEntry, RoundWinner, FactCheckOutcome, FactVerdict, JuryMessage, JuryModel, JuryPhase, JuryResult, Role, RoomSettings, RoomStatus, TeamIndex } from '@teeto/shared';
+import type { GameReview, RoundEnd, RoundLogEntry, RoundWinner, FactCheckOutcome, FactVerdict, JuryMessage, JuryModel, JuryPhase, JuryResult, Role, RoomSettings, RoomStatus, TeamIndex } from '@teeto/shared';
 
 export interface Participant {
   /** Public per-room id: broadcast in snapshots and used as the LiveKit identity. */
@@ -72,7 +72,8 @@ export interface FactCheckChallenge {
   speakerTeam: TeamIndex;
   claimId: string;
   claim: string;
-  status: 'checking' | 'resolved';
+  status: 'checking' | 'tiebreak' | 'resolved';
+  decidedByHost: boolean;
   verdict: FactVerdict | null;
   confidence: number | null;
   explanation: string | null;
@@ -129,6 +130,9 @@ export interface GameState {
     outTeam: TeamIndex | null;
   } | null;
   roundLog: RoundLogEntry[];
+  /** Talk time per speaker summed over finished rounds (timeUsedMs resets each round). */
+  talkTotals: Map<string, number>;
+  review: GameReview | null;
   segments: TranscriptSegment[];
   claims: ExtractedClaim[];
   factChecks: FactCheckChallenge[];
@@ -176,6 +180,8 @@ export function initialGameState(turnSeconds: number): GameState {
     roundClaim: null,
     intermission: null,
     roundLog: [],
+    talkTotals: new Map(),
+    review: null,
     segments: [],
     claims: [],
     factChecks: [],

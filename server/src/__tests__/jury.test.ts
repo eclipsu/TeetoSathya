@@ -33,6 +33,7 @@ function analysis(model: JuryModel, verdict: Round1Analysis['verdict']): Round1A
     confidence: 0.8,
     reasoning: `${model} reasoning`,
     spoken: `${model} says so`,
+    sources: [],
     keyBasis: [`${model} basis`],
     limitations: [`${model} limitation`],
   };
@@ -199,5 +200,22 @@ describe('one cycle for settled facts', () => {
     expect(settledAtOnce([{ verdict: 'INCORRECT', confidence: 0.97 }, { verdict: 'INCORRECT', confidence: 0.92 }])).toBe(true);
     expect(settledAtOnce([{ verdict: 'INCORRECT', confidence: 0.97 }, { verdict: 'INCORRECT', confidence: 0.7 }])).toBe(false);
     expect(settledAtOnce([{ verdict: 'INCORRECT', confidence: 0.97 }, { verdict: 'CORRECT', confidence: 0.95 }])).toBe(false);
+  });
+});
+
+describe('juror sources', () => {
+  it('drops links and duplicates and keeps at most three', async () => {
+    const { cleanSources } = await import('../services/factChecking/schemas');
+    expect(cleanSources(['BLS, Employment Projections, 2024 https://bls.gov/x', 'bls, employment projections, 2024', 'Census, ACS, 2023.', 'NCES, 2022', 'Extra'])).toEqual(['BLS, Employment Projections, 2024', 'Census, ACS, 2023', 'NCES, 2022']);
+    expect(cleanSources(undefined)).toEqual([]);
+  });
+});
+
+describe('long sources never break a vote', () => {
+  it('trims an over-long source instead of rejecting the juror', async () => {
+    const { cleanSources, round1Schema } = await import('../services/factChecking/schemas');
+    const long = 'Federal Reserve Bank of New York, The Labor Market for Recent College Graduates / Economic Value of College Majors, a very long subtitle, 2024';
+    expect(round1Schema.safeParse({ verdict: 'CORRECT', onTopic: true, confidence: 0.9, reasoning: 'r', sources: [long], keyBasis: [], limitations: [] }).success).toBe(true);
+    expect(cleanSources([long])[0]!.length).toBeLessThanOrEqual(100);
   });
 });

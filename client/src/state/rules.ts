@@ -4,6 +4,7 @@ import { factCheckBlockReason, factCheckContextFromSnapshot, type RoomSnapshot }
 export function micClosedReason(s: RoomSnapshot, myId: string | null): string | null {
   const me = s.participants.find((p) => p.id === myId);
   if (s.status === 'ended') return 'Round over — voice closed';
+  if (s.game.factCheck?.status === 'tiebreak') return 'Jury split — hold P to talk';
   if (!me || me.role !== 'speaker') return 'Spectators listen only';
   if (s.status !== 'live') return null;
   const g = s.game;
@@ -33,6 +34,7 @@ export function spaceAction(s: RoomSnapshot, myId: string | null): SpaceAction {
   if (me.role === null) return { action: null, label, reason: 'Pick a role first' };
   if (s.status === 'lobby') return { action: null, label, reason: 'Round not live yet' };
   if (s.status === 'ended') return { action: null, label, reason: 'Round over' };
+  if (g.factCheck?.status === 'tiebreak') return { action: null, label, reason: 'The jury split. Hold P to argue; the host decides' };
   if (g.factCheck) return { action: null, label, reason: `${g.factCheck.challengerName} called a fact check. ${g.factCheck.speakerName}, your mic is off.` };
   if (g.buzz) return { action: null, label, reason: `${g.buzz.username} buzzed in. Waiting for the host` };
   if (g.intermission) return { action: null, label, reason: `Round ${g.intermission.nextRound} starts in a moment` };

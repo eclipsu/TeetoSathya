@@ -81,7 +81,7 @@ export function ClaimPanel({ state, onClose, onSubmit }: { state: ClaimPanelStat
   );
 }
 
-const MODEL_NAME: Record<JuryModel, string> = {
+export const MODEL_NAME: Record<JuryModel, string> = {
   gemini: 'Gemini',
   gemini_skeptic: 'Gemini 2',
   groq: 'Groq',
@@ -97,6 +97,11 @@ type Final = { text: string; detail: string | null; kind: 'ok' | 'bad' | 'mid' |
 
 function finalOf(f: FactCheckView): Final {
   if (f.status === 'checking') return { text: f.juryPhase === 'deliberating' ? 'Deliberating' : 'Checking', detail: null, kind: 'wait' };
+  if (f.status === 'tiebreak') return { text: 'Jury split', detail: 'the host decides', kind: 'wait' };
+  if (f.decidedByHost) {
+    const landed = f.verdict === 'INCORRECT' || f.verdict === 'CONTRADICTED';
+    return { text: landed ? 'Claim is incorrect' : 'Claim stands', detail: `jury split · host ruled · challenge ${landed ? 'lands' : 'fails'}`, kind: landed ? 'bad' : 'ok' };
+  }
   if (f.unavailable) return { text: 'No decision', detail: 'The jury could not finish.', kind: 'mid' };
   const j = f.jury;
   const tally = j?.verdict ? `${Math.max(j.votesForCorrect, j.votesForIncorrect)}–${Math.min(j.votesForCorrect, j.votesForIncorrect)} · ${pct(j.juryConfidence)}` : null;
@@ -108,7 +113,7 @@ function finalOf(f: FactCheckView): Final {
   return { text: 'No decision', detail: null, kind: 'mid' };
 }
 
-function JurorMark({ model, size = 28 }: { model: JuryModel; size?: number }) {
+export function JurorMark({ model, size = 28 }: { model: JuryModel; size?: number }) {
   return (
     <span className={`juror-mark juror-mark--${model}`} style={{ width: size, height: size }} aria-hidden="true">
       {MODEL_NAME[model][0]}
@@ -129,7 +134,7 @@ const TYPE_CHAR_MS = 14;
  * Reveals `text` a few characters at a time. With `durationMs` (the spoken audio) it types in
  * step with the voice. `live` false shows it all at once (history, reconnects).
  */
-function useTypewriter(text: string, live: boolean, durationMs: number | null): string {
+export function useTypewriter(text: string, live: boolean, durationMs: number | null): string {
   const [shown, setShown] = useState(live ? 0 : text.length);
   useEffect(() => {
     if (!live || matchMedia('(prefers-reduced-motion: reduce)').matches) return setShown(text.length);
@@ -166,8 +171,19 @@ function Bubble({ msg, live, speaking }: { msg: JuryMessage; live: boolean; spea
           {text}
           {typing && <span className="jmsg__caret" aria-hidden="true" />}
         </p>
+        {!typing && msg.sources?.length > 0 && <Sources list={msg.sources} />}
       </div>
     </li>
+  );
+}
+
+/** Named sources (from the juror's knowledge, not links). */
+function Sources({ list, label = 'Source' }: { list: string[]; label?: string }) {
+  return (
+    <p className="jsources">
+      <span className="jsources__label">{label}</span>
+      {list.map((s) => <span key={s} className="jsources__item">{s}</span>)}
+    </p>
   );
 }
 
@@ -217,6 +233,11 @@ export function JuryThread({ check, speakingId = null }: { check: FactCheckView;
         <li className={`jury__verdict jury__verdict--${final.kind}`}>
           <span className="jury__verdict-text">{final.text}</span>
           {final.detail && <span className="jury__verdict-detail">{final.detail}</span>}
+          {(() => {
+            // The decision, backed by the sources the jurors named (deduplicated).
+            const all = [...new Set(check.thread.flatMap((m) => m.sources ?? []))].filter((s) => !/^general knowledge$/i.test(s));
+            return all.length ? <Sources list={all.slice(0, 4)} label="Based on" /> : null;
+          })()}
           <Points delta={check.scoreDelta} />
         </li>
       )}
@@ -228,9 +249,51 @@ export function JuryThread({ check, speakingId = null }: { check: FactCheckView;
 }
 
 /** Center-stage card for the active fact check: who challenged what, then the live jury. */
-export function ChallengeCard({ check, speakingId = null }: { check: FactCheckView; speakingId?: string | null }) {
+export interface TiebreakControls {
+  /** This viewer is the host: show the two decision buttons. */
+  isHost: boolean;
+  hostName: string | null;
+  onDecide: (verdict: 'CORRECT' | 'INCORRECT') => void;
+  /** Push-to-talk held (P key or the button). */
+  talking: boolean;
+  onTalk: (held: boolean) => void;
+}
+
+/** Jurors split: everyone may hold P to argue; the AI isn't listening; the host rules. */
+function Tiebreak({ c }: { c: TiebreakControls }) {
+  const hold = (held: boolean) => (e: React.PointerEvent) => { e.preventDefault(); c.onTalk(held); };
   return (
-    <article className="challenge tile" aria-label="Fact check in progress">
+    <div className="tiebreak" role="region" aria-label="Jury tie-break">
+      <p className="tiebreak__title">The jury split</p>
+      <p className="tiebreak__note">
+        Hold <kbd>P</kbd> to argue your case. The AI isn't listening. {c.isHost ? 'You decide.' : `${c.hostName ?? 'The host'} decides.`}
+      </p>
+      <div className="tiebreak__actions">
+        <button
+          type="button"
+          className={`btn btn--sm tiebreak__talk ${c.talking ? 'is-on' : ''}`}
+          onPointerDown={hold(true)}
+          onPointerUp={hold(false)}
+          onPointerLeave={() => c.talking && c.onTalk(false)}
+          onPointerCancel={() => c.onTalk(false)}
+          aria-pressed={c.talking}
+        >
+          {c.talking ? 'Talking…' : 'Hold to talk'}
+        </button>
+        {c.isHost && (
+          <>
+            <button type="button" className="btn btn--sm tiebreak__stands" onClick={() => c.onDecide('CORRECT')}>Claim stands</button>
+            <button type="button" className="btn btn--sm tiebreak__false" onClick={() => c.onDecide('INCORRECT')}>Claim is false</button>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+export function ChallengeCard({ check, speakingId = null, tiebreak }: { check: FactCheckView; speakingId?: string | null; tiebreak?: TiebreakControls }) {
+  return (
+    <article className={`challenge tile ${check.status === 'tiebreak' ? 'is-tiebreak' : ''}`} aria-label="Fact check in progress">
       <header className="challenge__head">
         <Avatar name={check.challengerName} size={36} />
         <div className="challenge__who">
@@ -240,6 +303,7 @@ export function ChallengeCard({ check, speakingId = null }: { check: FactCheckVi
       </header>
       <blockquote className="challenge__claim">“{check.claim}”</blockquote>
       <JuryThread check={check} speakingId={speakingId} />
+      {check.status === 'tiebreak' && tiebreak && <Tiebreak c={tiebreak} />}
     </article>
   );
 }
