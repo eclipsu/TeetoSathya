@@ -1,4 +1,4 @@
-import type { BuzzView, ClaimOption, Role, RoomSnapshot, TeamIndex } from './types';
+import type { BuzzView, ClaimOption, JuryModel, Role, RoomSnapshot, TeamIndex } from './types';
 
 export type ToastType = 'info' | 'success' | 'warn' | 'error';
 
@@ -58,10 +58,15 @@ export interface ClientToServerEvents {
   'host:rotateSpeaker': (p: HostPayload & { side: TeamIndex }, ack: Ack) => void;
   'host:pause': (p: HostPayload, ack: Ack) => void;
   'host:resume': (p: HostPayload, ack: Ack) => void;
+  /** End the whole game now (summary and winner). */
   'host:endRound': (p: HostPayload, ack: Ack) => void;
+  /** End only the current round: the next one starts, or the game ends after the last. */
+  'host:finishRound': (p: HostPayload, ack: Ack) => void;
+  /** Short (default) or detailed jury explanations. Allowed any time; applies to the next fact check. */
+  'host:juryDetail': (p: HostPayload & { detailed: boolean }, ack: Ack) => void;
   /** Break a tied round after it ended: a side, or 'draw'. */
   'host:pickWinner': (p: HostPayload & { winner: TeamIndex | 'draw' }, ack: Ack) => void;
-  'host:settings': (p: HostPayload & { turnSeconds: number; roundSeconds: number }, ack: Ack) => void;
+  'host:settings': (p: HostPayload & { turnSeconds: number; roundSeconds: number; totalRounds?: number }, ack: Ack) => void;
 
   /** Active hot-seat speaker: "I'm done", hands the floor to the other side. */
   'turn:done': (ack: Ack) => void;
@@ -97,4 +102,8 @@ export interface ServerToClientEvents {
   toast: (t: { type: ToastType; message: string }) => void;
   error: (e: AppError) => void;
   'room:closed': (p: { reason: string }) => void;
+  /** The host voice's round-opening announcement (MP3). */
+  'room:announce': (p: { text: string; audio: Uint8Array; durationMs: number }) => void;
+  /** A juror's line read aloud (MP3). Sent once, as the message appears; not replayed on reconnect. */
+  'jury:voice': (p: { checkId: string; messageId: string; model: JuryModel; audio: Uint8Array; durationMs: number }) => void;
 }

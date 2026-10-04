@@ -13,12 +13,13 @@ interface Props {
 
 const TURN_OPTIONS = [30, 60, 90, 120, 180, 300];
 const ROUND_OPTIONS = [300, 600, 900, 1200, 1800];
+const ROUNDS_OPTIONS = [1, 2, 3, 4, 5];
 const fmt = (s: number) => (s < 60 ? `${s}s` : s % 60 ? `${Math.floor(s / 60)}m${s % 60}s` : `${s / 60} min`);
 
 /** Floating control bar, rendered only for the host. Every action is re-checked on the server. */
 export function HostControlBar({ snapshot: s, hostCall, onDelete }: Props) {
   const [busy, setBusy] = useState(false);
-  const [confirm, setConfirm] = useState<'end' | 'delete' | null>(null);
+  const [confirm, setConfirm] = useState<'round' | 'end' | 'delete' | null>(null);
   const g = s.game;
 
   const run = async (event: string, extra?: Record<string, unknown>) => {
@@ -36,15 +37,22 @@ export function HostControlBar({ snapshot: s, hostCall, onDelete }: Props) {
           <label className="host-bar__field">
             <span>Each</span>
             <select className="input input--sm" value={s.settings.turnSeconds} disabled={busy}
-              onChange={(e) => run('host:settings', { turnSeconds: Number(e.target.value), roundSeconds: s.settings.roundSeconds })}>
+              onChange={(e) => run('host:settings', { turnSeconds: Number(e.target.value), roundSeconds: s.settings.roundSeconds, totalRounds: s.settings.totalRounds })}>
               {TURN_OPTIONS.map((v) => <option key={v} value={v}>{fmt(v)}</option>)}
             </select>
           </label>
           <label className="host-bar__field">
             <span>Round</span>
             <select className="input input--sm" value={s.settings.roundSeconds} disabled={busy}
-              onChange={(e) => run('host:settings', { turnSeconds: s.settings.turnSeconds, roundSeconds: Number(e.target.value) })}>
+              onChange={(e) => run('host:settings', { turnSeconds: s.settings.turnSeconds, roundSeconds: Number(e.target.value), totalRounds: s.settings.totalRounds })}>
               {ROUND_OPTIONS.map((v) => <option key={v} value={v}>{fmt(v)}</option>)}
+            </select>
+          </label>
+          <label className="host-bar__field">
+            <span>Rounds</span>
+            <select className="input input--sm" value={s.settings.totalRounds} disabled={busy}
+              onChange={(e) => run('host:settings', { turnSeconds: s.settings.turnSeconds, roundSeconds: s.settings.roundSeconds, totalRounds: Number(e.target.value) })}>
+              {ROUNDS_OPTIONS.map((v) => <option key={v} value={v}>{v}</option>)}
             </select>
           </label>
         </>
@@ -77,10 +85,27 @@ export function HostControlBar({ snapshot: s, hostCall, onDelete }: Props) {
               <RotateIcon width={16} height={16} /> <span className={`dot dot--${side === 0 ? 'a' : 'b'}`} /> <span className="btn__label">Rotate {s.sides[side]}</span>
             </button>
           ))}
-          <button className="btn btn--sm" disabled={busy} onClick={() => setConfirm('end')} title="End round">
-            <StopIcon width={16} height={16} /> <span className="btn__label">End round</span>
+          {g.round < s.settings.totalRounds && (
+            <button className="btn btn--sm" disabled={busy || !!g.intermission} onClick={() => setConfirm('round')} title="End this round and start the next one">
+              <StopIcon width={16} height={16} /> <span className="btn__label">End round</span>
+            </button>
+          )}
+          <button className="btn btn--sm" disabled={busy} onClick={() => setConfirm('end')} title="End the game now">
+            <StopIcon width={16} height={16} /> <span className="btn__label">End game</span>
           </button>
         </>
+      )}
+
+      {s.status !== 'ended' && (
+        <button
+          className={`btn btn--sm host-bar__jury ${s.settings.juryDetailed ? 'is-on' : ''}`}
+          disabled={busy}
+          aria-pressed={s.settings.juryDetailed}
+          onClick={() => run('host:juryDetail', { detailed: !s.settings.juryDetailed })}
+          title={s.settings.juryDetailed ? 'Jury explains its reasoning. Click for one short line each.' : 'Jury says one short line each. Click to have it explain in detail.'}
+        >
+          <span className="btn__label">Jury: {s.settings.juryDetailed ? 'Detailed' : 'Short'}</span>
+        </button>
       )}
 
       <button className="btn btn--danger btn--sm" disabled={busy} onClick={() => setConfirm('delete')} title="End & delete room">
@@ -88,10 +113,19 @@ export function HostControlBar({ snapshot: s, hostCall, onDelete }: Props) {
       </button>
 
       <ConfirmDialog
-        open={confirm === 'end'}
-        title="End the round now?"
-        message="Clocks stop and everyone sees the round summary."
+        open={confirm === 'round'}
+        title={`End round ${g.round} now?`}
+        message={`Round ${g.round + 1} starts after a short break, opened by ${s.sides[g.round % 2 === 1 ? 1 : 0]}.`}
         confirmLabel="End round"
+        busy={busy}
+        onCancel={() => setConfirm(null)}
+        onConfirm={async () => { await run('host:finishRound'); setConfirm(null); }}
+      />
+      <ConfirmDialog
+        open={confirm === 'end'}
+        title="End the game now?"
+        message="Clocks stop and everyone sees the final summary and the winner."
+        confirmLabel="End game"
         busy={busy}
         onCancel={() => setConfirm(null)}
         onConfirm={async () => { await run('host:endRound'); setConfirm(null); }}

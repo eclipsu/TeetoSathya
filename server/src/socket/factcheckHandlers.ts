@@ -3,6 +3,7 @@ import type { Room } from '../domain/model';
 import { activeSpeaker, addJuryMessage, beginFactCheckCountdown, canFactCheck, dismissFactCheck, getRecentClaims, mergeClaims, openFactCheck, resolveFactCheck, setConsidering, setJuryPhase, setJuryThinking } from '../domain/factcheck';
 import { DUMMY_SPEECH, probeClaimExtraction } from '../services/claimExtractor';
 import { runJury } from '../services/factChecking/jury';
+import { speakJurorLine } from '../services/elevenlabsTts';
 import { HandlerError, type AppSocket, type RoomHub } from './hub';
 
 /** Jurors look like they are thinking at least this long before a message lands. */
@@ -11,6 +12,10 @@ const THINK_MS = 2500;
 const MESSAGE_GAP_MS = 1400;
 /** Time the client spends typing out the last message before the verdict shows. */
 const TYPE_OUT_MS = 1800;
+/** Pause after a juror finishes speaking before the next voice starts. */
+const SPEAK_GAP_MS = 450;
+/** Don't hold a message longer than this waiting for its audio; it goes out as text only. */
+const VOICE_WAIT_MS = 6_000;
 
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, Math.max(0, ms)));
 
@@ -53,7 +58,7 @@ export function installFactCheckHandlers(hub: RoomHub) {
       if (!gate.ok) throw new HandlerError('invalid_state', gate.reason);
       const speaker = activeSpeaker(room);
       if (!speaker) throw new HandlerError('invalid_state', 'Nobody is speaking.');
-      const claims = getRecentClaims(room, speaker.sessionId, 4).map((c) => ({ id: c.id, text: c.text, createdAt: c.createdAt }));
+      const claims = getRecentClaims(room, speaker.sessionId).map((c) => ({ id: c.id, text: c.text, createdAt: c.createdAt }));
       ack({ ok: true, claims, speakerId: speaker.id, speakerName: speaker.username });
     });
 
@@ -88,7 +93,8 @@ export function installFactCheckHandlers(hub: RoomHub) {
       const out = await hub.store.update(room.id, (r) => ({ room: r, res: dismissFactCheck(r, Date.now()) }));
       if (!out) throw new HandlerError('room_not_found', 'This room no longer exists.');
       if (!out.res.ok) throw new HandlerError('invalid_state', out.res.message);
-      hub.toastRoom(room.id, 'info', 'Fact check dismissed. Clock running.');
+      for (const t of out.res.toasts) hub.toastRoom(room.id, t.type, t.message);
+      if (out.room.game.intermission === null && out.room.status === 'live') hub.toastRoom(room.id, 'info', 'Fact check dismissed. Clock running.');
       ack?.({ ok: true });
       await hub.changed(out.room);
     });
@@ -109,7 +115,11 @@ function safeJuryError(err: unknown): string {
 }
 
 async function judge(hub: RoomHub, roomId: string, challengeId: string, claimId: string, claim: string): Promise<void> {
-  const topic = (await hub.store.get(roomId))?.topic ?? '';
+  const current = await hub.store.get(roomId);
+  // The round is about the opener's first claim: challenges are judged in that context.
+  const roundClaim = current?.game.roundClaim?.text;
+  const topic = current ? (roundClaim ? `${current.topic} (this round is about the opening claim: "${roundClaim}")` : current.topic) : '';
+  const detailed = current?.settings.juryDetailed ?? false;
   let resolution: { verdict: 'CORRECT' | 'INCORRECT' | 'INCONCLUSIVE'; confidence: number; explanation: string; unavailable?: boolean; jury?: Awaited<ReturnType<typeof runJury>> | null };
   try {
     const push = async (apply: (room: Room) => boolean) => {
@@ -120,6 +130,8 @@ async function judge(hub: RoomHub, roomId: string, challengeId: string, claimId:
     // message, and answers that arrive together are spread out so each one can be read.
     let thinkingSince = Date.now();
     let lastMessageAt = 0;
+    /** When the juror currently speaking finishes. Voices never overlap. */
+    let speakingUntil = 0;
     let queue: Promise<void> = Promise.resolve();
     const paced = (wait: () => number, apply: (room: Room) => boolean, after?: () => void) => {
       queue = queue.then(async () => {
@@ -132,15 +144,25 @@ async function judge(hub: RoomHub, roomId: string, challengeId: string, claimId:
     const jury = await runJury(claimId, claim, topic, {
       onPhase: (phase) => paced(() => 0, (room) => setJuryPhase(room, challengeId, phase)),
       onThinking: (models) => paced(() => lastMessageAt ? lastMessageAt + MESSAGE_GAP_MS - Date.now() : 0, (room) => setJuryThinking(room, challengeId, models), () => { thinkingSince = Date.now(); }),
-      onMessage: (message) => paced(
-        () => Math.max(thinkingSince + THINK_MS, lastMessageAt + MESSAGE_GAP_MS) - Date.now(),
-        (room) => addJuryMessage(room, challengeId, { ...message, id: nanoid(8), at: Date.now() }),
-        () => { lastMessageAt = Date.now(); },
-      ),
-    });
+      onMessage: (message) => {
+        // Start the voice now, while the juror still looks like it is thinking.
+        const voice = Promise.race([speakJurorLine(message.model, message.text), sleep(VOICE_WAIT_MS).then(() => null)]);
+        const id = nanoid(8);
+        queue = queue.then(async () => {
+          await sleep(Math.max(thinkingSince + THINK_MS, lastMessageAt + MESSAGE_GAP_MS, speakingUntil + SPEAK_GAP_MS) - Date.now());
+          const spoken = await voice;
+          const audioMs = spoken?.durationMs ?? null;
+          lastMessageAt = Date.now();
+          speakingUntil = spoken ? lastMessageAt + spoken.durationMs : 0;
+          await push((room) => addJuryMessage(room, challengeId, { ...message, id, at: lastMessageAt, audioMs }));
+          if (spoken) hub.io.to(roomId).emit('jury:voice', { checkId: challengeId, messageId: id, model: message.model, audio: spoken.audio, durationMs: spoken.durationMs });
+        });
+        return queue;
+      },
+    }, detailed);
     await queue;
-    // Let the last message finish typing out before the verdict lands.
-    await sleep(lastMessageAt + TYPE_OUT_MS - Date.now());
+    // Let the last message finish typing out (and being spoken) before the verdict lands.
+    await sleep(Math.max(lastMessageAt + TYPE_OUT_MS, speakingUntil + SPEAK_GAP_MS) - Date.now());
     resolution = jury.verdict
       ? {
         verdict: jury.verdict,

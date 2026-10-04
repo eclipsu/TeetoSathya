@@ -31,7 +31,7 @@ export function Summary({ snapshot: s, isHost, onPickWinner }: Props) {
     <section className="summary tile" aria-labelledby="summary-title">
       {won !== null && <Confetti key={won} colors={confettiColors(won)} />}
       <header className="summary__head">
-        <p className="summary__kicker">Round over</p>
+        <p className="summary__kicker">Game over</p>
         <h2 id="summary-title" className="summary__topic">{s.topic}</h2>
         <p className="muted">Round time used: {formatClock(Math.max(0, roundUsed))}</p>
       </header>
@@ -59,6 +59,21 @@ export function Summary({ snapshot: s, isHost, onPickWinner }: Props) {
         )}
         <p className="summary__rule">A challenge that lands is +100 for the challenger's side. One that fails is −50 for the challenger's side.</p>
       </div>
+      {s.game.roundLog.length > 0 && (
+        <ol className="summary__rounds" aria-label="Rounds">
+          {s.game.roundLog.map((r) => (
+            <li key={r.number} className="summary__round">
+              <span className="summary__round-num">Round {r.number}</span>
+              <span className="summary__round-claim">{r.claim ? `“${r.claim}”` : 'No opening claim'}</span>
+              <span className="summary__round-meta">
+                {r.openerName ? `${r.openerName} opened for ${s.sides[r.openingSide]}` : `${s.sides[r.openingSide]} opened`}
+                {' · '}
+                {r.endedBy === 'out' && r.outTeam !== null ? `${s.sides[r.outTeam]} ran out of speakers` : r.endedBy === 'time' ? 'time ran out' : 'ended by the host'}
+              </span>
+            </li>
+          ))}
+        </ol>
+      )}
       <div className="summary__teams">
         {([0, 1] as const).map((side) => {
           const speakers = s.participants

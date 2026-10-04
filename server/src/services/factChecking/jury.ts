@@ -6,6 +6,7 @@ import { groqDeliberate, groqIndependent } from './groqJuror';
 import { chatgptDeliberate, chatgptIndependent } from './openaiJuror';
 import { geminiBusy } from '../gemini';
 import { JuryFailure, type Round1Analysis } from './types';
+import { capWords, DETAILED_WORDS, spokenLine } from './schemas';
 
 const ATTEMPT_MS = 18_000;
 
@@ -108,7 +109,7 @@ export interface JuryListener {
   /** Jurors now writing a message. */
   onThinking?: (models: JuryModel[]) => Promise<void> | void;
   /** One juror finished a message. Fires in arrival order. */
-  onMessage?: (message: Omit<JuryMessage, 'id' | 'at'>) => Promise<void> | void;
+  onMessage?: (message: Omit<JuryMessage, 'id' | 'at' | 'audioMs'>) => Promise<void> | void;
 }
 
 async function notify(fn: () => Promise<void> | void): Promise<void> {
@@ -131,9 +132,18 @@ function round1ToVote(analysis: Round1Analysis): JuryVote {
     finalConfidence: analysis.confidence,
     changedVote: false,
     reasoning: analysis.reasoning,
+    spoken: analysis.spoken,
     limitations: analysis.limitations,
     responseToOthers: 'No other juror is seated.',
   };
+}
+
+/** Above this, a unanimous first read is final (capitals, basic science…): no reply round. */
+export const SETTLED_CONFIDENCE = 0.9;
+
+/** Every seated juror already agrees, confidently: one cycle of talk is enough. */
+export function settledAtOnce(round1: Pick<Round1Analysis, 'verdict' | 'confidence'>[]): boolean {
+  return round1.length >= 2 && round1.every((a) => a.verdict === round1[0]!.verdict && a.confidence >= SETTLED_CONFIDENCE);
 }
 
 /** Off-topic claims are incorrect even if a juror called the unrelated fact true. */
@@ -158,7 +168,7 @@ const SEATS: Record<JuryModel, {
  * Round 1 in parallel (each seated model sees only the claim), then Round 2 in parallel
  * (each seated model sees the other seated analyses). The tally is not a model call.
  */
-export async function runJury(claimId: string, claim: string, topic: string, listener: JuryListener = {}): Promise<JuryResult> {
+export async function runJury(claimId: string, claim: string, topic: string, listener: JuryListener = {}, detailed = false): Promise<JuryResult> {
   const { onPhase, onThinking, onMessage } = listener;
   await notify(() => onPhase?.('independent'));
   await notify(() => onThinking?.([...JURY_SEATS]));
@@ -170,7 +180,7 @@ export async function runJury(claimId: string, claim: string, topic: string, lis
         stage: 'opening',
         verdict: analysis.verdict,
         confidence: analysis.confidence,
-        text: analysis.reasoning,
+        text: detailed ? capWords(analysis.reasoning, DETAILED_WORDS) : analysis.spoken,
         changedVote: false,
       }));
       return analysis;
@@ -185,7 +195,7 @@ export async function runJury(claimId: string, claim: string, topic: string, lis
   const round1 = settled.filter((analysis): analysis is Round1Analysis => analysis !== null);
   if (!round1.length) throw new Error('No juror returned a vote.');
 
-  const votes = round1.length < 2
+  const votes = round1.length < 2 || settledAtOnce(round1)
     ? round1.map(round1ToVote)
     : await (async () => {
       await notify(() => onPhase?.('deliberating'));
@@ -198,7 +208,9 @@ export async function runJury(claimId: string, claim: string, topic: string, lis
           stage: 'reply',
           verdict: vote.finalVerdict,
           confidence: vote.finalConfidence,
-          text: vote.responseToOthers || vote.reasoning,
+          text: detailed
+            ? capWords(vote.responseToOthers || vote.reasoning, DETAILED_WORDS)
+            : vote.spoken || spokenLine(undefined, vote.responseToOthers || vote.reasoning),
           changedVote: vote.changedVote,
         }));
         return vote;

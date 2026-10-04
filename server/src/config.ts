@@ -12,6 +12,16 @@ export const config = {
   livekitApiSecret: process.env.LIVEKIT_API_SECRET ?? 'secret',
   lanHost: process.env.LAN_HOST ?? '',
   elevenLabsApiKey: process.env.ELEVENLABS_API_KEY ?? '',
+  /** Juror text-to-speech. Flash is the low-latency model. Set ELEVENLABS_TTS=off to mute the jury. */
+  elevenLabsTts: (process.env.ELEVENLABS_TTS ?? 'on').toLowerCase() !== 'off',
+  elevenLabsTtsModel: process.env.ELEVENLABS_TTS_MODEL || 'eleven_flash_v2_5',
+  /** Speaking rate, 0.7–1.2 (ElevenLabs' limits). Default is the fastest. */
+  elevenLabsTtsSpeed: Math.min(1.2, Math.max(0.7, Number(process.env.ELEVENLABS_TTS_SPEED) || 1.2)),
+  /** One voice per seated juror. Defaults are ElevenLabs premade voices (George, Sarah). */
+  elevenLabsVoiceGemini: process.env.ELEVENLABS_VOICE_GEMINI || 'JBFqnCBsd6RMkjVDRZzb',
+  elevenLabsVoiceClaude: process.env.ELEVENLABS_VOICE_CLAUDE || 'EXAVITQu4vr4xnSDxMaL',
+  /** Debate host who announces the motion at the start of a round (premade "Daniel"). */
+  elevenLabsVoiceHost: process.env.ELEVENLABS_VOICE_HOST || 'onwK4e9ZLuTAKqWW03F9',
   geminiApiKey: process.env.GEMINI_API_KEY ?? '',
   geminiFactsKey: process.env.GEMINI_FACTS_KEY ?? '',
   /**

@@ -40,7 +40,11 @@ export function HotSeatCard({ side, snapshot: s, now, myId, onDone, compact = fa
         ? null
         : g.buzz
           ? 'Up next'
-          : 'Paused';
+          : g.intermission
+            ? 'Round over'
+            : g.intro
+              ? 'Opens'
+              : 'Paused';
 
   return (
     <div

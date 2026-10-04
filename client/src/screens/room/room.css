@@ -54,10 +54,10 @@
 .room__main {
   display: grid;
   grid-template-columns: minmax(240px, 320px) minmax(0, 1fr) minmax(240px, 320px);
-  grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-rows: minmax(0, 1fr) auto auto;
   grid-template-areas:
     'teamA stage teamB'
-    'facts stage .'
+    'teamA facts teamB'
     'spect spect spect';
   gap: var(--s4);
   min-height: 0;
@@ -65,7 +65,7 @@
 .room__main > .team--0 { grid-area: teamA; }
 .room__main > .team--1 { grid-area: teamB; }
 .room__main > .stage { grid-area: stage; }
-.room__main > .fact-chat, .room__main > .claim-panel { grid-area: facts; max-height: 400px; }
+.room__main > .fact-chat { grid-area: facts; max-height: 280px; }
 .room__main > .spectators { grid-area: spect; }
 
 /* Team column */
@@ -251,8 +251,8 @@ button.seat__open:hover .seat__take, button.seat__open:focus-visible .seat__take
     grid-template-rows: auto;
     grid-template-areas:
       'stage stage'
-      'teamA teamB'
       'facts facts'
+      'teamA teamB'
       'spect spect';
     gap: var(--s3);
   }
@@ -287,3 +287,18 @@ button.seat__open:hover .seat__take, button.seat__open:focus-visible .seat__take
 .considering::before { content: ''; width: 5px; height: 5px; border-radius: 50%; background: var(--warn); animation: considering-pulse 1.4s ease-in-out infinite; }
 @keyframes considering-pulse { 50% { opacity: 0.25; } }
 .hot .considering { margin-top: var(--s1); }
+
+.host-bar__jury.is-on { border-color: var(--text-dim); background: var(--surface-hover); }
+
+/* Caught out by a challenge: sits out the rest of the round */
+.seat--out { opacity: 0.5; }
+.seat--out .seat__name { text-decoration: line-through; text-decoration-color: var(--danger); }
+.seat--out .seat__status { color: var(--danger); }
+
+/* Per-round recap on the final summary */
+.summary__rounds { list-style: none; margin: 0 0 var(--s5); padding: 0; display: flex; flex-direction: column; border: 1px solid var(--border); border-radius: var(--radius); background: var(--bg); }
+.summary__round { display: grid; grid-template-columns: 84px minmax(0, 1fr); gap: 2px var(--s3); padding: var(--s3) var(--s4); }
+.summary__round + .summary__round { border-top: 1px solid var(--border); }
+.summary__round-num { grid-row: span 2; font-size: var(--fs-label); font-weight: 600; color: var(--text-dim); }
+.summary__round-claim { font-weight: 500; overflow-wrap: anywhere; }
+.summary__round-meta { font-size: var(--fs-label); color: var(--text-dim); }

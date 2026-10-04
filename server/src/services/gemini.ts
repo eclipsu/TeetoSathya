@@ -6,6 +6,8 @@ export interface GeminiRequest {
   user: string;
   schema: Record<string, unknown>;
   temperature?: number;
+  /** Skip the model's thinking step. Much faster (≈1 s vs 4–5 s); for simple extraction, not for judging. */
+  fast?: boolean;
 }
 
 /** Configured model, then one backup. Each attempt is capped so a hung model cannot block Claude. */
@@ -33,6 +35,7 @@ async function geminiJsonOnce(model: string, req: GeminiRequest, signal?: AbortS
         temperature: req.temperature ?? 0.2,
         responseMimeType: 'application/json',
         responseSchema: req.schema,
+        ...(req.fast ? { thinkingConfig: { thinkingBudget: 0 } } : {}),
       },
     }),
   });

@@ -14,6 +14,7 @@ import {
   openFactCheck,
   resolveFactCheck,
   setConsidering,
+  CLAIM_BUFFER_SIZE,
   setJuryThinking,
 } from '../domain/factcheck';
 import { join, makeRoom } from './helpers';
@@ -136,6 +137,9 @@ describe('recent claims', () => {
       originalText: 'A fact carried over from the other room.',
       createdAt: 3,
       roundSeq: there.game.roundSeq,
+      relevance: 1,
+      updatedAt: null,
+      evictedAt: null,
     });
     expect(getRecentClaims(here, here.hostSessionId).map((c) => c.id)).toEqual(['here']);
     expect(getRecentClaims(there, there.hostSessionId).map((c) => c.id)).toEqual(['there']);
@@ -248,7 +252,7 @@ describe('jury conversation', () => {
     addClaim(room, room.hostSessionId, 0, 'c1', 'Water boils at 90C at sea level.');
     expect(openFactCheck(room, 'sess-b1-00001', 'c1', T0 + 1000, 'fc1').ok).toBe(true);
     expect(setJuryThinking(room, 'fc1', ['gemini', 'claude'])).toBe(true);
-    const msg = { stage: 'opening' as const, verdict: 'INCORRECT' as const, confidence: 0.9, text: 'It boils at 100C.', changedVote: false, at: T0 + 2000 };
+    const msg = { stage: 'opening' as const, verdict: 'INCORRECT' as const, confidence: 0.9, text: 'It boils at 100C.', changedVote: false, at: T0 + 2000, audioMs: null };
     addJuryMessage(room, 'fc1', { ...msg, id: 'm1', model: 'claude' });
     const fc = room.game.factChecks[0]!;
     expect(fc.thread.map((m) => m.model)).toEqual(['claude']);
@@ -309,5 +313,143 @@ describe('voice after the round', () => {
     const room = liveRoom();
     game.endRound(room, T0 + 1000);
     for (const p of room.participants.values()) expect(canPublish(room, p)).toBe(false);
+  });
+});
+
+describe('round opening announcement', () => {
+  it('holds every clock until the announcement ends, then gives the opener the floor', () => {
+    const room = liveRoom();
+    game.beginIntro(room, T0, 'Welcome to the debate.', 4000);
+    expect(room.game.paused).toBe(true);
+    expect(room.game.clockRunningSince).toBeNull();
+    expect(canPublish(room, room.participants.get(room.hostSessionId)!)).toBe(false);
+    expect(game.nextDeadline(room)).toBe(T0 + 4000);
+    game.tick(room, T0 + 3999);
+    expect(room.game.paused).toBe(true);
+    game.tick(room, T0 + 4000);
+    expect(room.game.intro).toBeNull();
+    expect(room.game.paused).toBe(false);
+    expect(canPublish(room, room.participants.get(room.hostSessionId)!)).toBe(true);
+  });
+
+  it('the host can skip it with Resume', () => {
+    const room = liveRoom();
+    game.beginIntro(room, T0, 'Welcome.', 4000);
+    expect(game.resume(room, T0 + 500).ok).toBe(true);
+    expect(room.game.intro).toBeNull();
+    expect(room.game.paused).toBe(false);
+  });
+});
+
+describe('claim buffer (5 ideas per speaker, oldest out first)', () => {
+  const idea = (room: Room, id: string, text: string, at: number, extra: { relevance?: number; sameAs?: string } = {}) =>
+    mergeClaims(room, [{ id, text, originalText: text, speakerSessionId: room.hostSessionId, team: 0, createdAt: at, ...extra }], at);
+
+  it('keeps the newest five and evicts the oldest idea into history', () => {
+    const room = liveRoom();
+    for (let i = 1; i <= CLAIM_BUFFER_SIZE; i++) idea(room, `c${i}`, `Claim number ${i}.`, i);
+    const change = idea(room, 'c6', 'Claim number 6.', 6);
+    expect(change.evicted.map((c) => c.id)).toEqual(['c1']);
+    expect(getRecentClaims(room, room.hostSessionId).map((c) => c.id)).toEqual(['c6', 'c5', 'c4', 'c3', 'c2']);
+    expect(room.game.claims.find((c) => c.id === 'c1')?.evictedAt).toBe(6);
+  });
+
+  it('a restatement refines the idea in place and keeps its age', () => {
+    const room = liveRoom();
+    idea(room, 'c1', 'Unemployment is low.', 1);
+    for (let i = 2; i <= CLAIM_BUFFER_SIZE; i++) idea(room, `c${i}`, `Claim number ${i}.`, i);
+    const change = idea(room, 'x', 'Unemployment is 4 percent.', 10, { sameAs: 'c1' });
+    expect(change.refined.map((c) => c.id)).toEqual(['c1']);
+    expect(change.added).toHaveLength(0);
+    expect(room.game.claims.find((c) => c.id === 'c1')?.text).toBe('Unemployment is 4 percent.');
+    // Still the oldest idea: the next new one pushes it out.
+    expect(idea(room, 'c6', 'Claim number 6.', 11).evicted.map((c) => c.id)).toEqual(['c1']);
+  });
+
+  it('drops low-relevance claims', () => {
+    const room = liveRoom();
+    expect(idea(room, 'c1', 'Things are kind of bad.', 1, { relevance: 0.2 }).added).toHaveLength(0);
+    expect(getRecentClaims(room, room.hostSessionId)).toHaveLength(0);
+  });
+
+  it('holds evictions while someone is choosing a claim, then catches up', () => {
+    const room = liveRoom();
+    for (let i = 1; i <= CLAIM_BUFFER_SIZE; i++) idea(room, `c${i}`, `Claim number ${i}.`, i);
+    expect(setConsidering(room, 'sess-b1-00001', true)).toBe(true);
+    expect(idea(room, 'c6', 'Claim number 6.', 6).evicted).toHaveLength(0);
+    expect(getRecentClaims(room, room.hostSessionId).map((c) => c.id)).toContain('c1');
+    setConsidering(room, 'sess-b1-00001', false);
+    expect(getRecentClaims(room, room.hostSessionId).map((c) => c.id)).toEqual(['c6', 'c5', 'c4', 'c3', 'c2']);
+  });
+});
+
+describe('rounds: knock-outs, breaks, alternating openers', () => {
+  const landChallenge = (room: Room, challenger: string, claimId: string, text: string, at: number) => {
+    const speaker = room.game.hotSeat[room.game.activeSide!]!;
+    mergeClaims(room, [{ id: claimId, text, originalText: text, speakerSessionId: speaker, team: room.game.activeSide!, createdAt: at }], at);
+    expect(openFactCheck(room, challenger, claimId, at, `fc-${claimId}`).ok).toBe(true);
+    resolveFactCheck(room, `fc-${claimId}`, { verdict: 'INCORRECT', confidence: 0.95, explanation: 'No.' });
+    beginFactCheckCountdown(room, at);
+    return game.tick(room, at + FACT_CHECK_RESUME_MS);
+  };
+
+  it("the opener's first claim becomes the round claim", () => {
+    const room = liveRoom();
+    mergeClaims(room, [{ id: 'k1', text: 'Sydney is the capital of Australia.', originalText: 'x', speakerSessionId: room.hostSessionId, team: 0, createdAt: 1 }], 1);
+    mergeClaims(room, [{ id: 'k2', text: 'Australia has six states.', originalText: 'x', speakerSessionId: room.hostSessionId, team: 0, createdAt: 2 }], 2);
+    expect(room.game.roundClaim?.text).toBe('Sydney is the capital of Australia.');
+  });
+
+  it('a landed challenge knocks the speaker out; the next teammate takes over', () => {
+    const room = liveRoom();
+    landChallenge(room, 'sess-b1-00001', 'c1', 'The capital of Australia is Sydney.', T0 + 1000);
+    expect(room.game.eliminated.has(room.hostSessionId)).toBe(true);
+    expect(room.game.hotSeat[0]).toBe('sess-a2-00001');
+    expect(room.game.paused).toBe(false);
+    expect(game.setHotSeat(room, 0, room.hostSessionId, T0 + 9000).ok).toBe(false);
+  });
+
+  it('a team with nobody left ends the round; after the break the other side opens', () => {
+    const room = liveRoom();
+    landChallenge(room, 'sess-b1-00001', 'c1', 'The capital of Australia is Sydney.', T0 + 1000);
+    landChallenge(room, 'sess-b2-00001', 'c2', 'The Moon is made of cheese.', T0 + 10_000);
+    const im = room.game.intermission;
+    expect(im).not.toBeNull();
+    expect(im!.outTeam).toBe(0);
+    expect(im!.openingSide).toBe(1);
+    expect(room.game.roundLog[0]).toMatchObject({ number: 1, endedBy: 'out', outTeam: 0, claim: 'The capital of Australia is Sydney.' });
+    expect(room.game.paused).toBe(true);
+    expect(game.startNextRound(room, T0 + 20_000).ok).toBe(true);
+    expect(room.game.roundNumber).toBe(2);
+    expect(room.game.activeSide).toBe(1);
+    expect(room.game.eliminated.size).toBe(0);
+    expect(room.game.factCheckUsed.size).toBe(0);
+    expect(room.game.scores).toEqual([0, 200]); // points carry over
+    expect(['sess-b1-00001', 'sess-b2-00001']).toContain(room.game.roundOpener);
+  });
+
+  it('the game ends after the last round', () => {
+    const room = liveRoom();
+    room.settings.totalRounds = 2;
+    expect(game.finishRound(room, T0 + 1000, 'host').ok).toBe(true);
+    expect(room.status).toBe('live');
+    game.startNextRound(room, T0 + 7000);
+    expect(game.finishRound(room, T0 + 8000, 'time').ok).toBe(true);
+    expect(room.status).toBe('ended');
+    expect(room.game.roundLog.map((r) => r.endedBy)).toEqual(['host', 'time']);
+  });
+
+  it('ending the game mid-round still records that round', () => {
+    const room = liveRoom();
+    game.finishRound(room, T0 + 1000, 'out', 0);
+    game.startNextRound(room, T0 + 7000);
+    game.endRound(room, T0 + 9000);
+    expect(room.game.roundLog.map((r) => [r.number, r.endedBy])).toEqual([[1, 'out'], [2, 'host']]);
+  });
+
+  it('openers rotate: someone who already opened is picked last', () => {
+    const room = liveRoom();
+    room.game.openedBy.add('sess-b1-00001');
+    for (let i = 0; i < 10; i++) expect(game.pickOpener(room, 1)?.sessionId).toBe('sess-b2-00001');
   });
 });

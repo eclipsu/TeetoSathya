@@ -20,6 +20,8 @@ export function newRoom(input: RoomInput, hostSessionId: string, now: number): R
       speakersPerTeamMax: LIMITS.speakersPerTeamMax,
       turnSeconds: input.turnSeconds,
       roundSeconds: input.roundSeconds,
+      juryDetailed: false,
+      totalRounds: LIMITS.totalRoundsDefault,
     },
     game: initialGameState(input.turnSeconds),
     emptySince: now,

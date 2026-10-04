@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { factCheckBlockReason, factCheckContextFromSnapshot, JURY_SEATS, type ClaimOption, type FactCheckView, type JuryMessage, type JuryModel, type RoomSnapshot } from '@teeto/shared';
 import { Avatar } from '../../components/Avatar';
 import { WarnIcon } from '../../components/icons';
@@ -13,7 +13,7 @@ export function FactCheckButton({ snapshot, myId, open, onOpen }: { snapshot: Ro
   if (factCheckBlockReason(factCheckContextFromSnapshot(snapshot, myId))) return null;
   return (
     <button className={`btn btn--sm factcheck-btn ${open ? 'is-open' : ''}`} onClick={onOpen} type="button" aria-expanded={open}>
-      <WarnIcon /> Fact check
+      <WarnIcon /> Fact check <kbd className="factcheck-btn__key">Space</kbd>
     </button>
   );
 }
@@ -121,16 +121,19 @@ function sideOf(model: JuryModel): 'left' | 'right' {
   return JURY_SEATS.indexOf(model) <= 0 ? 'left' : 'right';
 }
 
-/** Whole message typed out over at most this long (server waits about as long before the verdict). */
+/** Text-only messages type out over at most this long (server waits about as long before the verdict). */
 const TYPE_MAX_MS = 1500;
 const TYPE_CHAR_MS = 14;
 
-/** Reveals `text` a few characters at a time. `live` false shows it all at once (history, reconnects). */
-function useTypewriter(text: string, live: boolean): string {
+/**
+ * Reveals `text` a few characters at a time. With `durationMs` (the spoken audio) it types in
+ * step with the voice. `live` false shows it all at once (history, reconnects).
+ */
+function useTypewriter(text: string, live: boolean, durationMs: number | null): string {
   const [shown, setShown] = useState(live ? 0 : text.length);
   useEffect(() => {
     if (!live || matchMedia('(prefers-reduced-motion: reduce)').matches) return setShown(text.length);
-    const total = Math.min(TYPE_MAX_MS, text.length * TYPE_CHAR_MS);
+    const total = durationMs ? durationMs * 0.92 : Math.min(TYPE_MAX_MS, text.length * TYPE_CHAR_MS);
     const start = performance.now();
     let raf = 0;
     const step = (t: number) => {
@@ -140,16 +143,16 @@ function useTypewriter(text: string, live: boolean): string {
     };
     raf = requestAnimationFrame(step);
     return () => cancelAnimationFrame(raf);
-  }, [text, live]);
+  }, [text, live, durationMs]);
   return text.slice(0, shown);
 }
 
-function Bubble({ msg, live }: { msg: JuryMessage; live: boolean }) {
+function Bubble({ msg, live, speaking }: { msg: JuryMessage; live: boolean; speaking: boolean }) {
   const side = sideOf(msg.model);
-  const text = useTypewriter(msg.text, live);
+  const text = useTypewriter(msg.text, live, msg.audioMs ?? null);
   const typing = text.length < msg.text.length;
   return (
-    <li className={`jmsg jmsg--${side}`}>
+    <li className={`jmsg jmsg--${side} ${speaking ? 'is-speaking' : ''}`}>
       <JurorMark model={msg.model} />
       <div className="jmsg__body">
         <div className="jmsg__meta">
@@ -184,7 +187,7 @@ function Thinking({ model }: { model: JuryModel }) {
  * The jurors' conversation: each model's opening read, then their replies to each other,
  * then the verdict as the last line of the same thread.
  */
-export function JuryThread({ check }: { check: FactCheckView }) {
+export function JuryThread({ check, speakingId = null }: { check: FactCheckView; speakingId?: string | null }) {
   const log = useRef<HTMLOListElement>(null);
   const openings = check.thread.filter((m) => m.stage === 'opening');
   const replies = check.thread.filter((m) => m.stage === 'reply');
@@ -205,10 +208,10 @@ export function JuryThread({ check }: { check: FactCheckView }) {
   return (
     <ol className="jury" ref={log} aria-live="polite">
       <li className="jury__divider"><span>Independent reads</span></li>
-      {openings.map((m) => <Bubble key={m.id} msg={m} live={live(m)} />)}
+      {openings.map((m) => <Bubble key={m.id} msg={m} live={live(m)} speaking={m.id === speakingId} />)}
       {thinkingOpen.map((m) => <Thinking key={`t-${m}`} model={m} />)}
       {deliberating && <li className="jury__divider"><span>Reading each other</span></li>}
-      {replies.map((m) => <Bubble key={m.id} msg={m} live={live(m)} />)}
+      {replies.map((m) => <Bubble key={m.id} msg={m} live={live(m)} speaking={m.id === speakingId} />)}
       {thinkingReply.map((m) => <Thinking key={`r-${m}`} model={m} />)}
       {check.status === 'resolved' && (
         <li className={`jury__verdict jury__verdict--${final.kind}`}>
@@ -225,7 +228,7 @@ export function JuryThread({ check }: { check: FactCheckView }) {
 }
 
 /** Center-stage card for the active fact check: who challenged what, then the live jury. */
-export function ChallengeCard({ check }: { check: FactCheckView }) {
+export function ChallengeCard({ check, speakingId = null }: { check: FactCheckView; speakingId?: string | null }) {
   return (
     <article className="challenge tile" aria-label="Fact check in progress">
       <header className="challenge__head">
@@ -236,7 +239,7 @@ export function ChallengeCard({ check }: { check: FactCheckView }) {
         </div>
       </header>
       <blockquote className="challenge__claim">“{check.claim}”</blockquote>
-      <JuryThread check={check} />
+      <JuryThread check={check} speakingId={speakingId} />
     </article>
   );
 }
@@ -248,17 +251,26 @@ function Points({ delta }: { delta: number | null }) {
 }
 
 /** Left-bar history of this round's checks: one line each, result at the end. */
-export function FactChat({ items }: { items: FactCheckView[] }) {
+export function FactChat({ items, action, live = false }: { items: FactCheckView[]; action?: ReactNode; live?: boolean }) {
   const log = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const el = log.current;
     if (el) el.scrollTop = el.scrollHeight;
   }, [items]);
   return (
-    <aside className="fact-chat tile" aria-label="Fact checks">
-      <header className="fact-chat__head">Fact checks</header>
+    <section className="fact-chat tile" aria-label="Fact checks">
+      <header className="fact-chat__head">
+        <span className="fact-chat__title">Fact checks{items.length > 0 && <span className="fact-chat__count">{items.length}</span>}</span>
+        {action}
+      </header>
       <div className="fact-chat__log" ref={log}>
-        {items.length === 0 && <p className="fact-chat__empty">Challenges show up here.</p>}
+        {items.length === 0 && (
+          <p className="fact-chat__empty">
+            {live
+              ? 'No challenges yet. When the other side is speaking, press Space or Fact check to challenge one of their claims.'
+              : 'No challenges this round.'}
+          </p>
+        )}
         {items.map((item) => {
           const final = finalOf(item);
           return (
@@ -274,6 +286,6 @@ export function FactChat({ items }: { items: FactCheckView[] }) {
           );
         })}
       </div>
-    </aside>
+    </section>
   );
 }

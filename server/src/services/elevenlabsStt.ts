@@ -36,7 +36,7 @@ export class ElevenLabsSession {
     url.searchParams.set('model_id', 'scribe_v2_realtime');
     url.searchParams.set('audio_format', 'pcm_16000');
     url.searchParams.set('commit_strategy', 'vad');
-    url.searchParams.set('vad_silence_threshold_secs', '0.8');
+    url.searchParams.set('vad_silence_threshold_secs', '0.6');
     url.searchParams.set('language_code', 'en');
     const ws = new WebSocket(url, { headers: { 'xi-api-key': config.elevenLabsApiKey } });
     this.ws = ws;

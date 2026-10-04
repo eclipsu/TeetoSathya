@@ -8,6 +8,33 @@ export interface RoomSettings {
   turnSeconds: number;
   /** Total round length, set by the host. */
   roundSeconds: number;
+  /** Host asked the jury to explain itself: longer spoken lines. Off = one short line each. */
+  juryDetailed: boolean;
+  /** Rounds in a game, set by the host in the lobby. */
+  totalRounds: number;
+}
+
+/** Why a round ended: a team ran out of speakers, the round clock ran out, or the host ended it. */
+export type RoundEnd = 'out' | 'time' | 'host';
+
+export interface RoundLogEntry {
+  number: number;
+  openingSide: TeamIndex;
+  openerName: string | null;
+  claim: string | null;
+  endedBy: RoundEnd;
+  /** The team that ran out of speakers, when endedBy is 'out'. */
+  outTeam: TeamIndex | null;
+}
+
+/** Between rounds: clocks are frozen and the next opener is already chosen. */
+export interface IntermissionView {
+  until: number;
+  nextRound: number;
+  openingSide: TeamIndex;
+  openerId: string | null;
+  endedBy: RoundEnd;
+  outTeam: TeamIndex | null;
 }
 
 /** Row in GET /api/rooms. */
@@ -97,6 +124,8 @@ export interface JuryVote {
   reasoning: string;
   limitations: string[];
   responseToOthers: string;
+  /** Short line said to the room. Falls back to the reasoning's first sentence. */
+  spoken?: string;
 }
 
 /** Deterministic tally of the seated jurors' final votes. No model decides this. */
@@ -124,10 +153,13 @@ export interface JuryMessage {
   stage: 'opening' | 'reply';
   verdict: JuryBinary;
   confidence: number;
+  /** One short spoken line, also read aloud with this juror's voice. */
   text: string;
   /** Reply only: the juror switched sides after reading the other one. */
   changedVote: boolean;
   at: number;
+  /** Length of the spoken audio, so the text types out in step with it. Null when there is no audio. */
+  audioMs: number | null;
 }
 
 /** One challengeable claim offered to the challenger. Not a fact-check result. */
@@ -189,6 +221,17 @@ export interface GameView {
   consideringIds: string[];
   /** Team A, Team B. Authoritative. Reset when a round starts. */
   scores: [number, number];
+  /** The host's opening announcement. Clocks hold until `until`, then the opener has the floor. */
+  intro: { text: string; until: number } | null;
+  /** Speakers knocked out this round by a challenge that landed. They can't take the hot seat again until the next round. */
+  eliminatedIds: string[];
+  /** The opener's first claim: what this round is about. Null until they make one. */
+  roundClaim: { text: string; speakerId: string } | null;
+  /** Who opened this round. */
+  openerId: string | null;
+  intermission: IntermissionView | null;
+  /** Finished rounds, oldest first. */
+  roundLog: RoundLogEntry[];
   /** Set once the round has ended and a winner is known. Null while live, or on a tie until the host picks. */
   winner: import('./score').RoundWinner | null;
 }

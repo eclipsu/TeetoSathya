@@ -30,7 +30,14 @@ Preserve the relevant original wording as originalText.
 
 Return structured JSON only.
 
-If there are no objectively fact-checkable claims, return an empty claims array.`;
+If there are no objectively fact-checkable claims, return an empty claims array.
+
+You may also receive EARLIER SPEECH from the same speaker. Use it only to understand references in the new speech ("that number", "they", "it doubled"), so the claim you write is self-contained. Never extract claims from the earlier speech itself.
+
+You may also receive the speaker's CURRENT IDEAS: claims already captured, each with an id.
+If a new claim restates, repeats or sharpens one of those ideas, set sameAs to that id and write the best wording of it. Otherwise set sameAs to an empty string.
+
+For every claim, set relevance from 0 to 1: how objectively checkable it is, how specific it is (names, numbers, dates), and how central it is to the debate topic. A vague or barely checkable claim is below 0.4; a specific, checkable, on-topic claim is 0.8 or higher.`;
 
 const CLAUDE_SCHEMA = {
   type: 'object',
@@ -44,8 +51,10 @@ const CLAUDE_SCHEMA = {
         properties: {
           text: { type: 'string' },
           originalText: { type: 'string' },
+          relevance: { type: 'number' },
+          sameAs: { type: 'string' },
         },
-        required: ['text', 'originalText'],
+        required: ['text', 'originalText', 'relevance', 'sameAs'],
       },
     },
   },
@@ -62,8 +71,10 @@ const SCHEMA = {
         properties: {
           text: { type: 'STRING' },
           originalText: { type: 'STRING' },
+          relevance: { type: 'NUMBER' },
+          sameAs: { type: 'STRING' },
         },
-        required: ['text', 'originalText'],
+        required: ['text', 'originalText', 'relevance', 'sameAs'],
       },
     },
   },
@@ -73,6 +84,19 @@ const SCHEMA = {
 export interface DraftClaim {
   text: string;
   originalText: string;
+  /** 0–1; 1 when the model left it out. */
+  relevance: number;
+  /** Id of a current idea this restates, or null. */
+  sameAs: string | null;
+}
+
+/** What the extractor knows about the speaker beyond the new speech. */
+export interface ExtractionContext {
+  topic?: string;
+  /** The speaker's recent words before the new speech. For resolving references only. */
+  earlier?: string;
+  /** The speaker's current buffered ideas. */
+  ideas?: { id: string; text: string }[];
 }
 
 export function parseDraftClaims(raw: unknown): DraftClaim[] {
@@ -87,7 +111,10 @@ export function parseDraftClaims(raw: unknown): DraftClaim[] {
     const original = typeof (item as { originalText?: unknown }).originalText === 'string'
       ? (item as { originalText: string }).originalText.trim()
       : '';
-    out.push({ text, originalText: original || text });
+    const rel = (item as { relevance?: unknown }).relevance;
+    const relevance = typeof rel === 'number' && Number.isFinite(rel) ? Math.max(0, Math.min(1, rel > 1 && rel <= 100 ? rel / 100 : rel)) : 1;
+    const same = (item as { sameAs?: unknown }).sameAs;
+    out.push({ text, originalText: original || text, relevance, sameAs: typeof same === 'string' && same.trim() ? same.trim() : null });
   }
   return out;
 }
@@ -134,10 +161,20 @@ export async function probeClaimExtraction(transcript: string): Promise<{
 /** Extract challengeable claims. Returns [] when the key is missing. Throws on API failure. */
 let warnedMissingKey = false;
 
-export async function extractClaims(transcript: string, signal?: AbortSignal): Promise<DraftClaim[]> {
+/** The user message: topic, earlier speech (context only), current ideas, then the new speech. */
+export function extractionUser(transcript: string, ctx: ExtractionContext = {}): string {
+  const parts: string[] = [];
+  if (ctx.topic) parts.push(`Debate topic: """${ctx.topic}"""`);
+  if (ctx.earlier?.trim()) parts.push(`EARLIER SPEECH (context only, do not extract from it):\n"""${ctx.earlier.trim().slice(-1200)}"""`);
+  if (ctx.ideas?.length) parts.push(`CURRENT IDEAS:\n${ctx.ideas.map((i) => `- id ${i.id}: ${i.text}`).join('\n')}`);
+  parts.push(`NEW SPEECH from the same speaker (extract from this):\n"""${transcript.trim().slice(0, 6000)}"""`);
+  return parts.join('\n\n');
+}
+
+export async function extractClaims(transcript: string, signal?: AbortSignal, ctx: ExtractionContext = {}): Promise<DraftClaim[]> {
   const text = transcript.trim();
   if (!text) return [];
-  const user = `Finalized speech from one speaker:\n"""${text.slice(0, 6000)}"""`;
+  const user = extractionUser(text, ctx);
   const apiKey = config.geminiApiKey || config.geminiFactsKey;
   if (!apiKey && !config.anthropicApiKey) {
     if (!warnedMissingKey) {
@@ -154,6 +191,7 @@ export async function extractClaims(transcript: string, signal?: AbortSignal): P
       user,
       schema: SCHEMA,
       temperature: 0.2,
+      fast: true, // extraction runs on every pause in speech: latency matters more than deliberation
     }, signal).then((raw) => ({ source: 'gemini', drafts: parseDraftClaims(raw) })));
   }
   if (config.anthropicApiKey) {

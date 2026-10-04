@@ -28,6 +28,7 @@ import { Stage } from './room/Stage';
 import { Summary } from './room/Summary';
 import { ClaimPanel, FactChat, FactCheckButton, type ClaimPanelState } from './room/FactCheck';
 import { HostedRoomSubscription, hostedSpacetimeDatabase } from '../spacetime/hosted';
+import { useSpokenLines } from '../state/useSpokenLines';
 import './room/room.css';
 import './room/stage.css';
 
@@ -40,6 +41,7 @@ export function RoomScreen({ roomId }: { roomId: string }) {
   const { status, snapshot, me, myId, isHost } = room;
   const [pickerOpen, setPickerOpen] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [starting, setStarting] = useState(false);
   const [demo, setDemo] = useState<{ busy: boolean; gemini: string | null; claude: string | null; claims: string[] }>({ busy: false, gemini: null, claude: null, claims: [] });
   const [claimPanel, setClaimPanel] = useState<ClaimPanelState>(CLOSED_PANEL);
   const factGen = useRef(0);
@@ -53,9 +55,11 @@ export function RoomScreen({ roomId }: { roomId: string }) {
     const a = actionRef.current;
     if (a?.action === 'done') void done();
     else if (a?.action === 'buzz') void buzz();
+    else if (a?.action === 'factcheck') openClaimPanel();
   });
 
   useGameSounds(snapshot);
+  const speakingLine = useSpokenLines(room.socket);
 
   // Buzz moment: sound for everyone in the room.
   useEffect(() => {
@@ -105,10 +109,17 @@ export function RoomScreen({ roomId }: { roomId: string }) {
     if (claimPanel.open && !claimPanel.busy) void loadClaims(factGen.current);
   }, [speakerKey]);
 
-  async function hostCall(event: string, extra: Record<string, unknown> = {}) {
-    const res = await room.call(event as never, { hostToken: getHostToken(roomId), ...extra });
+  async function hostCall(event: string, extra: Record<string, unknown> = {}, timeoutMs?: number) {
+    const res = await room.call(event as never, { hostToken: getHostToken(roomId), ...extra }, timeoutMs);
     if (!res.ok) toast('error', res.message);
     return res.ok;
+  }
+
+  // The server writes and voices the opening announcement first, so this can take a few seconds.
+  async function startRound() {
+    setStarting(true);
+    await hostCall('host:startRound', {}, 20_000);
+    setStarting(false);
   }
 
   async function deleteRoom() {
@@ -162,6 +173,11 @@ export function RoomScreen({ roomId }: { roomId: string }) {
     const claims = Array.isArray(res.claims) ? res.claims as ClaimOption[] : [];
     const speakerName = typeof res.speakerName === 'string' ? res.speakerName : null;
     setClaimPanel((p) => ({ ...p, loading: false, claims, speakerName, error: null }));
+  }
+
+  /** SPACE: open the picker (never closes it, so a second press can't drop a half-made choice). */
+  function openClaimPanel() {
+    if (!claimPanel.open) toggleClaimPanel();
   }
 
   function toggleClaimPanel() {
@@ -273,17 +289,23 @@ export function RoomScreen({ roomId }: { roomId: string }) {
           </main>
         ) : (
           <main className="room__main">
-            <FactChat items={snapshot.game.factChecks} />
             <TeamColumn team={0} snapshot={snapshot} myId={myId} canTakeSeat={canTakeSeat} onTakeSeat={(t) => pick('speaker', t)} onHotSeat={hotSeatAction} />
             <Stage
               snapshot={snapshot}
               myId={myId}
               isHost={isHost}
               onDone={done}
-              onStart={() => void hostCall('host:startRound')}
+              onStart={() => void startRound()}
+              starting={starting}
               interimText={room.interim && snapshot.game.activeSide !== null && snapshot.game.hotSeat[snapshot.game.activeSide] === room.interim.speakerId ? room.interim.text : null}
               transcriptionAvailable={room.transcriptionAvailable}
+              speakingId={speakingLine}
               picker={claimPanel.open ? <ClaimPanel state={claimPanel} onClose={closeClaimPanel} onSubmit={(id) => void submitFactCheck(id)} /> : undefined}
+            />
+            <FactChat
+              items={snapshot.game.factChecks}
+              live={snapshot.status === 'live'}
+              action={snapshot.status === 'live' ? <FactCheckButton snapshot={snapshot} myId={myId} open={claimPanel.open} onOpen={toggleClaimPanel} /> : undefined}
             />
             <TeamColumn team={1} snapshot={snapshot} myId={myId} canTakeSeat={canTakeSeat} onTakeSeat={(t) => pick('speaker', t)} onHotSeat={hotSeatAction} />
             <SpectatorStrip snapshot={snapshot} myId={myId} />
@@ -304,9 +326,6 @@ export function RoomScreen({ roomId }: { roomId: string }) {
         )}
 
         <div className="room__footer">
-          {snapshot.status === 'live' && (
-            <FactCheckButton snapshot={snapshot} myId={myId} open={claimPanel.open} onOpen={toggleClaimPanel} />
-          )}
           {snapshot.status === 'live' && (
             <button className="btn btn--ghost btn--sm" type="button" disabled={demo.busy} onClick={() => void runDummySummary()}>
               {demo.busy ? 'Testing summary…' : 'Test summary'}

@@ -808,6 +808,29 @@ export const recordClaim = spacetimedb.reducer(
   },
 );
 
+/** Mirror of the server's claim buffer. Upsert: refinements and evictions update the same row. */
+export const recordClaimIdea = spacetimedb.reducer(
+  {
+    claimId: t.string(),
+    roomId: t.string(),
+    roundId: t.string(),
+    speakerId: t.string(),
+    text: t.string(),
+    relevance: t.f64(),
+    admittedAtMs: t.i64(),
+    updatedAtMs: t.i64(),
+    evictedAtMs: t.i64(),
+  },
+  (ctx, args) => {
+    assertOwner(ctx);
+    const text = args.text.trim();
+    if (!text) return;
+    const row = { ...args, text };
+    if (ctx.db.claimIdea.claimId.find(args.claimId)) ctx.db.claimIdea.claimId.update(row);
+    else ctx.db.claimIdea.insert(row);
+  },
+);
+
 export const recordFactCheck = spacetimedb.reducer(
   {
     id: t.string(),

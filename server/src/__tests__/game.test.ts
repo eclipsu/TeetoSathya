@@ -91,6 +91,7 @@ describe('chess-clock math', () => {
 
   it('round ends when the round deadline passes, even with talk time left', () => {
     const room = liveRoom();
+    room.settings.totalRounds = 1; // single-round game: the round ending ends the game
     room.game.roundEndsAt = T0 + 30_000; // shorter than any speaker's budget
     expect(game.nextDeadline(room)).toBe(T0 + 30_000);
     game.tick(room, T0 + 29_999);
@@ -103,6 +104,7 @@ describe('chess-clock math', () => {
 
   it('round ends when everyone is out of time', () => {
     const room = liveRoom();
+    room.settings.totalRounds = 1; // single-round game: the round ending ends the game
     let t = T0;
     for (let i = 0; i < 4; i++) {
       t = game.nextDeadline(room)!;

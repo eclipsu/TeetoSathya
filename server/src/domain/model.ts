@@ -1,4 +1,4 @@
-import type { RoundWinner, FactCheckOutcome, FactVerdict, JuryMessage, JuryModel, JuryPhase, JuryResult, Role, RoomSettings, RoomStatus, TeamIndex } from '@teeto/shared';
+import type { RoundEnd, RoundLogEntry, RoundWinner, FactCheckOutcome, FactVerdict, JuryMessage, JuryModel, JuryPhase, JuryResult, Role, RoomSettings, RoomStatus, TeamIndex } from '@teeto/shared';
 
 export interface Participant {
   /** Public per-room id: broadcast in snapshots and used as the LiveKit identity. */
@@ -48,8 +48,15 @@ export interface ExtractedClaim {
   team: TeamIndex;
   text: string;
   originalText: string;
+  /** When the idea first entered the buffer. Eviction order: oldest first. A restatement doesn't reset it. */
   createdAt: number;
   roundSeq: number;
+  /** 0–1 from the extractor: how checkable, specific and on-topic the claim is. */
+  relevance: number;
+  /** Set when a restatement refined the wording in place. */
+  updatedAt: number | null;
+  /** Set when a newer idea pushed it out of the speaker's buffer. Kept for history. */
+  evictedAt: number | null;
 }
 
 export interface FactCheckChallenge {
@@ -103,6 +110,25 @@ export interface GameState {
   factCheckResumeAt: number | null;
   /** Team A, Team B. Reset at the start of each round. */
   scores: [number, number];
+  /** Opening announcement playing at the start of a round; clocks are frozen until `until`. */
+  intro: { text: string; until: number } | null;
+  /** 1-based round within the game; 0 before the game starts. (roundSeq is a unique id per round.) */
+  roundNumber: number;
+  /** Knocked out this round by a landed challenge. */
+  eliminated: Set<string>;
+  /** Everyone who has opened a round this game; openers are picked from the rest first. */
+  openedBy: Set<string>;
+  roundOpener: string | null;
+  roundClaim: { claimId: string; text: string } | null;
+  intermission: {
+    until: number;
+    nextRound: number;
+    openingSide: TeamIndex;
+    openerSessionId: string | null;
+    endedBy: RoundEnd;
+    outTeam: TeamIndex | null;
+  } | null;
+  roundLog: RoundLogEntry[];
   segments: TranscriptSegment[];
   claims: ExtractedClaim[];
   factChecks: FactCheckChallenge[];
@@ -142,6 +168,14 @@ export function initialGameState(turnSeconds: number): GameState {
     winner: null,
     factCheckResumeAt: null,
     scores: [0, 0],
+    intro: null,
+    roundNumber: 0,
+    eliminated: new Set(),
+    openedBy: new Set(),
+    roundOpener: null,
+    roundClaim: null,
+    intermission: null,
+    roundLog: [],
     segments: [],
     claims: [],
     factChecks: [],

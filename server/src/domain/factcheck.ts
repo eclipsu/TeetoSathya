@@ -1,7 +1,7 @@
 import { factCheckBlockReason, type FactCheckOutcome, type FactVerdict, type JuryMessage, type JuryModel, type JuryPhase, type JuryResult, type TeamIndex } from '@teeto/shared';
 import type { ExtractedClaim, FactCheckChallenge, Participant, Room, TranscriptSegment } from './model';
 import { canPublish } from './micPolicy';
-import { freezeClocks, unfreezeClocks } from './game';
+import { freezeClocks, replaceEliminated, unfreezeClocks, type GameToast } from './game';
 
 const CLAIM_CAP = 200;
 
@@ -42,10 +42,13 @@ export function canFactCheck(room: Room, sessionId: string): { ok: true } | { ok
   return reason ? { ok: false, reason } : { ok: true };
 }
 
-/** Newest claims first, at most `limit`, for this speaker in this room and round only. */
-export function getRecentClaims(room: Room, speakerSessionId: string, limit = 4): ExtractedClaim[] {
-  const mine = room.game.claims.filter((c) => c.roomId === room.id && c.speakerSessionId === speakerSessionId && c.roundSeq === room.game.roundSeq);
-  return mine.slice(-limit).reverse();
+/**
+ * The speaker's buffered ideas, newest first. Normally at most CLAIM_BUFFER_SIZE; while pinned it can
+ * briefly hold more, and all of them are offered so nothing disappears from an open picker.
+ */
+export function getRecentClaims(room: Room, speakerSessionId: string, limit = Infinity): ExtractedClaim[] {
+  const live = room.game.claims.filter((c) => c.roomId === room.id && c.speakerSessionId === speakerSessionId && c.roundSeq === room.game.roundSeq && c.evictedAt === null);
+  return live.slice(-limit).reverse();
 }
 
 export function appendTranscript(room: Room, seg: TranscriptSegment): boolean {
@@ -58,6 +61,11 @@ export function appendTranscript(room: Room, seg: TranscriptSegment): boolean {
   return true;
 }
 
+/** Live ideas kept per speaker per round. The picker offers exactly these. */
+export const CLAIM_BUFFER_SIZE = 5;
+/** Extractor relevance below this never enters the buffer (vague, off-topic, barely checkable). */
+export const MIN_RELEVANCE = 0.35;
+
 export interface IncomingClaim {
   id: string;
   text: string;
@@ -65,35 +73,91 @@ export interface IncomingClaim {
   speakerSessionId: string;
   team: TeamIndex;
   createdAt: number;
+  /** 0–1. Missing means fully relevant (manual and test claims). */
+  relevance?: number;
+  /** Id of a buffered claim this one restates or sharpens: refine that one instead of adding. */
+  sameAs?: string | null;
 }
 
-/** Merge new claims into that speaker's history. Skips blanks and duplicates. */
-export function mergeClaims(room: Room, incoming: IncomingClaim[]): ExtractedClaim[] {
-  if (room.status !== 'live') return [];
-  const added: ExtractedClaim[] = [];
+export interface BufferChange {
+  added: ExtractedClaim[];
+  refined: ExtractedClaim[];
+  evicted: ExtractedClaim[];
+}
+
+/** This speaker's live ideas this round, oldest first. */
+function liveIdeas(room: Room, speakerSessionId: string): ExtractedClaim[] {
+  return room.game.claims
+    .filter((c) => c.roomId === room.id && c.roundSeq === room.game.roundSeq && c.speakerSessionId === speakerSessionId && c.evictedAt === null)
+    .sort((a, b) => a.createdAt - b.createdAt);
+}
+
+/** While someone is choosing a claim to challenge, the speaker's buffer holds still: nothing vanishes mid-pick. */
+export function bufferPinned(room: Room, speakerSessionId: string): boolean {
+  return room.game.considering.size > 0 && activeSpeaker(room)?.sessionId === speakerSessionId;
+}
+
+/** Push out the oldest ideas until the speaker is back to CLAIM_BUFFER_SIZE. No-op while pinned. */
+export function trimBuffer(room: Room, speakerSessionId: string, now: number): ExtractedClaim[] {
+  if (bufferPinned(room, speakerSessionId)) return [];
+  const live = liveIdeas(room, speakerSessionId);
+  const evicted = live.slice(0, Math.max(0, live.length - CLAIM_BUFFER_SIZE));
+  for (const c of evicted) c.evictedAt = now;
+  return evicted;
+}
+
+/**
+ * Admit new ideas into a speaker's buffer.
+ * - Below MIN_RELEVANCE: dropped.
+ * - `sameAs` a live idea: that idea takes the sharper wording, keeps its id and its age.
+ * - Same wording as a live idea: dropped. (An evicted idea said again comes back as new.)
+ * - Otherwise added; past CLAIM_BUFFER_SIZE the oldest idea is evicted (kept in history).
+ */
+export function mergeClaims(room: Room, incoming: IncomingClaim[], now = Date.now()): BufferChange {
+  const change: BufferChange = { added: [], refined: [], evicted: [] };
+  if (room.status !== 'live') return change;
+  const speakers = new Set<string>();
   for (const raw of incoming) {
     const text = raw.text.trim().slice(0, 280);
-    if (!text) continue;
-    const key = claimKey(text);
-    const dup = room.game.claims.some(
-      (c) => c.roundSeq === room.game.roundSeq && c.speakerSessionId === raw.speakerSessionId && claimKey(c.text) === key,
-    );
-    if (dup) continue;
+    const relevance = Math.max(0, Math.min(1, raw.relevance ?? 1));
+    if (!text || relevance < MIN_RELEVANCE) continue;
+    const originalText = (raw.originalText.trim() || text).slice(0, 500);
+    const live = liveIdeas(room, raw.speakerSessionId);
+    const target = raw.sameAs ? live.find((c) => c.id === raw.sameAs) : undefined;
+    if (target) {
+      if (claimKey(target.text) !== claimKey(text)) {
+        target.text = text;
+        target.originalText = originalText;
+        target.updatedAt = now;
+        change.refined.push(target);
+      }
+      target.relevance = Math.max(target.relevance, relevance);
+      if (room.game.roundClaim?.claimId === target.id) room.game.roundClaim.text = target.text;
+      continue;
+    }
+    if (live.some((c) => claimKey(c.text) === claimKey(text))) continue;
     const claim: ExtractedClaim = {
       id: raw.id,
       roomId: room.id,
       speakerSessionId: raw.speakerSessionId,
       team: raw.team,
       text,
-      originalText: (raw.originalText.trim() || text).slice(0, 500),
+      originalText,
       createdAt: raw.createdAt,
       roundSeq: room.game.roundSeq,
+      relevance,
+      updatedAt: null,
+      evictedAt: null,
     };
     room.game.claims.push(claim);
-    added.push(claim);
+    change.added.push(claim);
+    // The opener's first idea is what the round is about.
+    if (!room.game.roundClaim && claim.speakerSessionId === room.game.roundOpener) room.game.roundClaim = { claimId: claim.id, text: claim.text };
+    speakers.add(raw.speakerSessionId);
   }
+  for (const sid of speakers) change.evicted.push(...trimBuffer(room, sid, now));
   if (room.game.claims.length > CLAIM_CAP) room.game.claims.splice(0, room.game.claims.length - CLAIM_CAP);
-  return added;
+  return change;
 }
 
 export type OpenFactCheckResult =
@@ -119,6 +183,7 @@ export function openFactCheck(room: Room, challengerSessionId: string, claimId: 
   room.game.factCheckUsed.add(challengerSessionId);
   // The room is about to watch the jury; nobody else can open a check until it clears.
   room.game.considering.clear();
+  trimBuffer(room, speaker.sessionId, now);
   freezeClocks(room, now);
   const challenge: FactCheckChallenge = {
     id,
@@ -185,6 +250,8 @@ export function resolveFactCheck(room: Room, challengeId: string, result: FactCh
   const delta = challenge.outcome === 'successful' ? 100 : challenge.outcome === 'failed' ? -50 : 0;
   challenge.scoreDelta = delta;
   room.game.scores[challenge.challengerTeam] += delta;
+  // Caught out: the speaker leaves the hot seat once the verdict clears (see replaceEliminated).
+  if (challenge.outcome === 'successful') room.game.eliminated.add(challenge.speakerSessionId);
   room.game.factCheckResumeAt = null;
   return { ok: true, challenge };
 }
@@ -227,6 +294,9 @@ export function setConsidering(room: Room, sessionId: string, on: boolean): bool
   const had = room.game.considering.has(sessionId);
   if (!on) {
     room.game.considering.delete(sessionId);
+    // Picker closed: the buffer catches up on any evictions it held back.
+    const speaker = activeSpeaker(room);
+    if (had && speaker) trimBuffer(room, speaker.sessionId, Date.now());
     return had;
   }
   if (had || !canFactCheck(room, sessionId).ok) return false;
@@ -235,14 +305,15 @@ export function setConsidering(room: Room, sessionId: string, on: boolean): bool
 }
 
 /** Host resumes early. Refuses while the referee is still working, so the room can read the verdict. */
-export function dismissFactCheck(room: Room, now: number): { ok: true } | { ok: false; message: string } {
+export function dismissFactCheck(room: Room, now: number): { ok: true; toasts: GameToast[] } | { ok: false; message: string } {
   if (room.status !== 'live' || !room.game.activeFactCheckId) return { ok: false, message: 'There is no fact check to dismiss.' };
   const challenge = room.game.factChecks.find((f) => f.id === room.game.activeFactCheckId);
   if (challenge?.status === 'checking') return { ok: false, message: 'The fact check is still running.' };
   room.game.factCheckResumeAt = null;
   room.game.activeFactCheckId = null;
-  unfreezeClocks(room, now);
-  return { ok: true };
+  const out = replaceEliminated(room, now);
+  if (!out.roundOver) unfreezeClocks(room, now);
+  return { ok: true, toasts: out.toasts };
 }
 
 /** Model said SUPPORTED/CONTRADICTED but was not confident enough: treat as no decision. */

@@ -1,8 +1,9 @@
-import { validateRoomInput, type TeamIndex } from '@teeto/shared';
+import { LIMITS, validateRoomInput, type TeamIndex } from '@teeto/shared';
 import type { Room } from '../domain/model';
 import * as game from '../domain/game';
 import type { GameResult } from '../domain/game';
 import { onBuzzResolved } from '../seams/challenge';
+import { announceRound } from '../services/announcer';
 import { TokenBucket } from './rateLimit';
 import { HandlerError, type AppSocket, type RoomHub } from './hub';
 
@@ -10,6 +11,10 @@ import { HandlerError, type AppSocket, type RoomHub } from './hub';
 export function installGameHandlers(hub: RoomHub) {
   // Per-session buzz limiter (separate from the general socket limiter): 3 presses, refills 1 per 2s.
   const buzzLimiters = new Map<string, TokenBucket>();
+  /** Rooms whose host pressed Start and whose announcement is still being written. */
+  const starting = new Set<string>();
+  /** Small gap after the announcement before the opener's clock starts. */
+  const INTRO_TAIL_MS = 500;
 
   /** Run a game transition inside store.update, then toast + broadcast. */
   async function apply(roomId: string, fn: (room: Room, now: number) => GameResult) {
@@ -30,9 +35,26 @@ export function installGameHandlers(hub: RoomHub) {
   };
 
   hub.io.on('connection', (socket: AppSocket) => {
+    // Start: the host voice announces the motion and the sides, clocks hold until it ends.
     hub.handle(socket, 'host:startRound', async (p, ack) => {
       const room = await hub.requireHost(socket, p?.hostToken);
-      await apply(room.id, game.startRound);
+      const blocked = game.startBlockReason(room);
+      if (blocked) throw new HandlerError('invalid_state', blocked);
+      if (starting.has(room.id)) throw new HandlerError('invalid_state', 'The round is already starting.');
+      starting.add(room.id);
+      try {
+        hub.toastRoom(room.id, 'info', 'Starting the round…');
+        const opener = game.openingSpeaker(room);
+        const intro = await announceRound(room.topic, room.sides, opener?.username ?? null, 1, room.settings.totalRounds);
+        await apply(room.id, (r, now) => {
+          const res = game.startRound(r, now, opener?.sessionId);
+          if (res.ok && intro.voice) game.beginIntro(r, now, intro.text, intro.voice.durationMs + INTRO_TAIL_MS);
+          return res;
+        });
+        if (intro.voice) hub.io.to(room.id).emit('room:announce', { text: intro.text, audio: intro.voice.audio, durationMs: intro.voice.durationMs });
+      } finally {
+        starting.delete(room.id);
+      }
       ack?.({ ok: true });
     });
 
@@ -75,6 +97,22 @@ export function installGameHandlers(hub: RoomHub) {
       ack?.({ ok: true });
     });
 
+    hub.handle(socket, 'host:juryDetail', async (p, ack) => {
+      const room = await hub.requireHost(socket, p?.hostToken);
+      const detailed = p?.detailed === true;
+      await apply(room.id, (r) => {
+        r.settings.juryDetailed = detailed;
+        return { ok: true, toasts: [{ type: 'info', message: detailed ? 'Jury will explain in detail.' : 'Jury will keep it short.' }] };
+      });
+      ack?.({ ok: true });
+    });
+
+    hub.handle(socket, 'host:finishRound', async (p, ack) => {
+      const room = await hub.requireHost(socket, p?.hostToken);
+      await apply(room.id, (r, now) => game.finishRound(r, now, 'host'));
+      ack?.({ ok: true });
+    });
+
     hub.handle(socket, 'host:pickWinner', async (p, ack) => {
       const room = await hub.requireHost(socket, p?.hostToken);
       const winner = p?.winner;
@@ -87,7 +125,11 @@ export function installGameHandlers(hub: RoomHub) {
       const room = await hub.requireHost(socket, p?.hostToken);
       const parsed = validateRoomInput({ topic: room.topic, sides: room.sides, turnSeconds: p?.turnSeconds, roundSeconds: p?.roundSeconds });
       if (!parsed.ok) throw new HandlerError('bad_request', parsed.errors[0]!);
-      await apply(room.id, (r) => game.updateSettings(r, parsed.value.turnSeconds, parsed.value.roundSeconds));
+      const rounds = p?.totalRounds ?? room.settings.totalRounds;
+      if (!Number.isInteger(rounds) || rounds < LIMITS.totalRoundsMin || rounds > LIMITS.totalRoundsMax) {
+        throw new HandlerError('bad_request', `Rounds must be ${LIMITS.totalRoundsMin}–${LIMITS.totalRoundsMax}.`);
+      }
+      await apply(room.id, (r) => game.updateSettings(r, parsed.value.turnSeconds, parsed.value.roundSeconds, rounds));
       ack?.({ ok: true });
     });
 

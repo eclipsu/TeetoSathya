@@ -14,10 +14,14 @@ interface Props {
   isHost: boolean;
   onDone: () => void;
   onStart: () => void;
+  /** Host pressed Start; the announcement is being prepared. */
+  starting?: boolean;
   interimText: string | null;
   transcriptionAvailable: boolean | null;
   /** The challenger's own claim picker. Only this viewer sees it in the middle. */
   picker?: ReactNode;
+  /** Jury message being read aloud right now. */
+  speakingId?: string | null;
 }
 
 type Center =
@@ -49,7 +53,7 @@ function useLinger(center: Center | null): { shown: Center | null; leaving: bool
 }
 
 /** Center stage: round timer, two hot seats, and the challenge card that slides up between them. */
-export function Stage({ snapshot: s, myId, isHost, onDone, onStart, interimText, transcriptionAvailable, picker }: Props) {
+export function Stage({ snapshot: s, myId, isHost, onDone, onStart, starting = false, interimText, transcriptionAvailable, picker, speakingId = null }: Props) {
   const live = s.status === 'live';
   const now = useServerNow(live);
   const g = s.game;
@@ -57,6 +61,8 @@ export function Stage({ snapshot: s, myId, isHost, onDone, onStart, interimText,
   const runningRound = live && g.roundEndsAt !== null;
   const resumeMs = g.factCheckResumeAt === null ? null : g.factCheckResumeAt - now;
   const resumeSeconds = resumeMs !== null && resumeMs > 0 ? Math.ceil(resumeMs / 1000) : null;
+  const introMs = g.intro ? g.intro.until - now : null;
+  const introSeconds = introMs !== null && introMs > 0 ? Math.ceil(introMs / 1000) : null;
 
   const buzzer = g.buzz ? s.participants.find((p) => p.id === g.buzz!.participantId) : undefined;
   const center: Center | null = g.factCheck
@@ -83,9 +89,16 @@ export function Stage({ snapshot: s, myId, isHost, onDone, onStart, interimText,
     seenKey.current = key;
   }, [center?.kind === 'pick' ? null : center?.key]);
 
+  const total = s.settings.totalRounds;
+  const roundName = `Round ${g.round || 1}${total > 1 ? ` of ${total}` : ''}`;
   const roundLabel = !live
-    ? 'Round ready'
-    : `Round ${g.round || 1} · ${g.factCheck ? 'Fact check' : g.buzz ? 'Buzz' : g.paused ? 'Paused' : 'Live'}`;
+    ? `${total} round${total === 1 ? '' : 's'}`
+    : `${roundName} · ${g.intermission ? 'Over' : g.intro ? 'Opening' : g.factCheck ? 'Fact check' : g.buzz ? 'Buzz' : g.paused ? 'Paused' : 'Live'}`;
+  const im = g.intermission;
+  const breakMs = im ? im.until - now : null;
+  const breakSeconds = breakMs !== null && breakMs > 0 ? Math.ceil(breakMs / 1000) : null;
+  const nextOpener = im?.openerId ? s.participants.find((p) => p.id === im.openerId)?.username ?? null : null;
+  const opener = g.openerId ? s.participants.find((p) => p.id === g.openerId)?.username ?? null : null;
   const seated = ([0, 1] as const).every((t) => s.participants.some((p) => p.role === 'speaker' && p.team === t));
   const challenging = !!center;
 
@@ -100,6 +113,32 @@ export function Stage({ snapshot: s, myId, isHost, onDone, onStart, interimText,
             <span className="stage__score-dash">–</span>
             <strong>{g.scores[1]}</strong> {s.sides[1]}<span className="dot dot--b" />
           </p>
+        )}
+        {im && (
+          <div className="stage__break" aria-live="polite">
+            <p className="stage__break-title">
+              Round {g.round} over{im.endedBy === 'out' && im.outTeam !== null ? `: ${s.sides[im.outTeam]} ran out of speakers` : im.endedBy === 'time' ? ': time is up' : ''}
+            </p>
+            <p className="stage__break-next">
+              Round {im.nextRound}: {nextOpener ? <strong>{nextOpener}</strong> : 'a new speaker'} opens for {s.sides[im.openingSide]}
+              {breakSeconds !== null && <> · in {breakSeconds}s</>}
+            </p>
+          </div>
+        )}
+        {live && !im && (
+          <p className={`stage__claim ${g.roundClaim ? '' : 'is-waiting'}`}>
+            <span className="stage__claim-label">Round claim</span>
+            {g.roundClaim ? <span className="stage__claim-text">“{g.roundClaim.text}”</span> : <span>Waiting for {opener ?? 'the opener'}'s opening claim…</span>}
+          </p>
+        )}
+        {g.intro && introSeconds !== null && (
+          <div className={`stage__intro ${speakingId === 'intro' ? 'is-speaking' : ''}`} aria-live="polite">
+            <p className="stage__intro-text">{g.intro.text}</p>
+            <p className="stage__countdown" role="timer" aria-label={`Floor opens in ${introSeconds} seconds`}>
+              <span className="stage__countdown-num">{introSeconds}</span>
+              <span className="stage__countdown-label">Floor opens</span>
+            </p>
+          </div>
         )}
         {resumeSeconds !== null && (
           <p className="stage__countdown" role="timer" aria-live="polite" aria-label={`Resuming in ${resumeSeconds} seconds`}>
@@ -116,7 +155,7 @@ export function Stage({ snapshot: s, myId, isHost, onDone, onStart, interimText,
           {shown && (
             <div className="stage__center-inner" key={shown.key}>
               {shown.kind === 'fact'
-                ? <ChallengeCard check={shown.check} />
+                ? <ChallengeCard check={shown.check} speakingId={speakingId} />
                 : shown.kind === 'pick'
                   ? shown.node
                   : <BuzzCard buzz={shown.buzz} challenged={shown.challenged} team={shown.team} />}
@@ -136,8 +175,8 @@ export function Stage({ snapshot: s, myId, isHost, onDone, onStart, interimText,
                 : 'Waiting for the host to start.'}
           </p>
           {isHost && (
-            <button className="btn btn--primary stage__start" onClick={onStart} disabled={!seated}>
-              <PlayIcon /> Start
+            <button className="btn btn--primary stage__start" onClick={onStart} disabled={!seated || starting}>
+              <PlayIcon /> {starting ? 'Starting…' : 'Start'}
             </button>
           )}
         </div>

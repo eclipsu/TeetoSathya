@@ -158,6 +158,30 @@ const claim = table(
   },
 );
 
+/**
+ * Live state of each claim in its speaker's 5-idea buffer (one row per claim, upserted).
+ * evictedAtMs = 0 while the idea is live; set when a newer idea pushed it out. The claim row
+ * keeps the first wording; `text` here is the latest (restatements refine it in place).
+ */
+const claimIdea = table(
+  {
+    name: 'claim_idea',
+    public: true,
+    indexes: [{ accessor: 'by_round_speaker', algorithm: 'btree', columns: ['roundId', 'speakerId'] }],
+  },
+  {
+    claimId: t.string().primaryKey(),
+    roomId: t.string(),
+    roundId: t.string(),
+    speakerId: t.string(),
+    text: t.string(),
+    relevance: t.f64(),
+    admittedAtMs: t.i64(),
+    updatedAtMs: t.i64(),
+    evictedAtMs: t.i64(),
+  },
+);
+
 const factCheck = table(
   {
     name: 'fact_check',
@@ -269,6 +293,7 @@ const spacetimedb = schema({
   speakerQueue,
   transcriptSegment,
   claim,
+  claimIdea,
   factCheck,
   factCheckUsage,
   factCheckVote,

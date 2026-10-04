@@ -22,6 +22,19 @@ export const Claim = __t.object("Claim", {
 });
 export type Claim = __Infer<typeof Claim>;
 
+export const ClaimIdea = __t.object("ClaimIdea", {
+  claimId: __t.string(),
+  roomId: __t.string(),
+  roundId: __t.string(),
+  speakerId: __t.string(),
+  text: __t.string(),
+  relevance: __t.f64(),
+  admittedAtMs: __t.i64(),
+  updatedAtMs: __t.i64(),
+  evictedAtMs: __t.i64(),
+});
+export type ClaimIdea = __Infer<typeof ClaimIdea>;
+
 export const FactCheck = __t.object("FactCheck", {
   id: __t.string(),
   roomId: __t.string(),

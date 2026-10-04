@@ -9,6 +9,8 @@ export interface Round1Analysis {
   onTopic: boolean;
   confidence: number;
   reasoning: string;
+  /** Short line said to the room. The full reasoning still goes to the other juror. */
+  spoken: string;
   keyBasis: string[];
   limitations: string[];
 }

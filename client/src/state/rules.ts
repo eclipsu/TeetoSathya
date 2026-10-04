@@ -1,4 +1,4 @@
-import type { RoomSnapshot } from '@teeto/shared';
+import { factCheckBlockReason, factCheckContextFromSnapshot, type RoomSnapshot } from '@teeto/shared';
 
 /** Client-side mirror of the server mic policy, used only to EXPLAIN why the mic is closed. */
 export function micClosedReason(s: RoomSnapshot, myId: string | null): string | null {
@@ -17,7 +17,7 @@ export function micClosedReason(s: RoomSnapshot, myId: string | null): string | 
 }
 
 export type SpaceAction =
-  | { action: 'buzz' | 'done'; label: string }
+  | { action: 'buzz' | 'done' | 'factcheck'; label: string }
   | { action: null; label: string | null; reason: string };
 
 /**
@@ -35,9 +35,17 @@ export function spaceAction(s: RoomSnapshot, myId: string | null): SpaceAction {
   if (s.status === 'ended') return { action: null, label, reason: 'Round over' };
   if (g.factCheck) return { action: null, label, reason: `${g.factCheck.challengerName} called a fact check. ${g.factCheck.speakerName}, your mic is off.` };
   if (g.buzz) return { action: null, label, reason: `${g.buzz.username} buzzed in. Waiting for the host` };
+  if (g.intermission) return { action: null, label, reason: `Round ${g.intermission.nextRound} starts in a moment` };
+  if (g.intro) return { action: null, label, reason: 'The host is opening the round' };
+  if (g.eliminatedIds.includes(me.id)) return { action: null, label, reason: "You're out for this round" };
   if (g.paused) return { action: null, label, reason: 'Round paused' };
   if (me.role === 'spectator') return { action: 'buzz', label: 'BUZZ IN' };
   if (mySide !== -1 && g.activeSide === mySide) return { action: 'done', label: "I'M DONE" };
+  // Opposing speakers (hot seat or bench): SPACE opens the claim picker while they still have a check.
+  if (!factCheckBlockReason(factCheckContextFromSnapshot(s, myId))) return { action: 'factcheck', label: 'CHALLENGE' };
+  if (me.team !== null && me.team !== g.activeSide && g.factCheckUsedIds.includes(me.id)) {
+    return { action: null, label: 'CHALLENGE', reason: 'You already used your fact check this round' };
+  }
   if (mySide !== -1) return { action: null, label, reason: "You're in the hot seat. Wait for your turn" };
-  return { action: null, label, reason: "You're on the bench. Only spectators can buzz in" };
+  return { action: null, label, reason: "You're on the bench. Your side can challenge when the other side speaks" };
 }

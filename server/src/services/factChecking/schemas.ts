@@ -13,6 +13,25 @@ const confidence = z.preprocess((value) => {
 
 const shortText = z.string().trim().min(1).max(1200);
 const notes = z.array(z.string().trim().min(1).max(240)).max(6);
+/** Optional so a model that skips it still parses; spokenLine() falls back to the reasoning. */
+const spoken = z.string().trim().max(400).optional();
+
+const SPOKEN_WORDS = 14;
+/** Detailed mode (host's choice) reads the juror's full reasoning, up to this many words. */
+export const DETAILED_WORDS = 45;
+const SPOKEN_HINT = `One short sentence said out loud to the debate room, at most ${SPOKEN_WORDS - 2} words. Verdict first, then the one fact that decides it. No lists, no hedging, no sources.`;
+
+export function capWords(text: string, max: number): string {
+  const words = text.replace(/\s+/g, ' ').trim().split(' ');
+  if (words.length <= max) return words.join(' ');
+  return `${words.slice(0, max).join(' ').replace(/[,;:]$/, '')}…`;
+}
+
+/** The line shown and spoken in the room: the model's `spoken`, else the reasoning's first sentence, capped. */
+export function spokenLine(text: string | undefined, fallback: string): string {
+  const raw = text?.trim() || fallback.trim().split(/(?<=[.!?])\s+/)[0] || fallback;
+  return capWords(raw, SPOKEN_WORDS);
+}
 
 /** Round 1. The server stamps model and role; the model cannot choose its identity. */
 export const round1Schema = z.object({
@@ -20,6 +39,7 @@ export const round1Schema = z.object({
   onTopic: z.boolean(),
   confidence,
   reasoning: shortText,
+  spoken,
   keyBasis: notes,
   limitations: notes,
 }).strict();
@@ -34,6 +54,7 @@ export const round2Schema = z.object({
   changedVote: z.boolean(),
   responseToOthers: shortText,
   finalReasoning: shortText,
+  spoken,
 }).strict();
 
 export type Round1Fields = z.infer<typeof round1Schema>;
@@ -47,10 +68,11 @@ export const ROUND1_JSON_SCHEMA = {
     onTopic: { type: 'boolean' },
     confidence: { type: 'number' },
     reasoning: { type: 'string' },
+    spoken: { type: 'string', description: SPOKEN_HINT },
     keyBasis: { type: 'array', items: { type: 'string' } },
     limitations: { type: 'array', items: { type: 'string' } },
   },
-  required: ['verdict', 'onTopic', 'confidence', 'reasoning', 'keyBasis', 'limitations'],
+  required: ['verdict', 'onTopic', 'confidence', 'reasoning', 'spoken', 'keyBasis', 'limitations'],
 } as const;
 
 export const ROUND2_JSON_SCHEMA = {
@@ -65,8 +87,9 @@ export const ROUND2_JSON_SCHEMA = {
     changedVote: { type: 'boolean' },
     responseToOthers: { type: 'string' },
     finalReasoning: { type: 'string' },
+    spoken: { type: 'string', description: `${SPOKEN_HINT} Answer the other juror directly.` },
   },
-  required: ['initialVerdict', 'initialConfidence', 'finalVerdict', 'onTopic', 'finalConfidence', 'changedVote', 'responseToOthers', 'finalReasoning'],
+  required: ['initialVerdict', 'initialConfidence', 'finalVerdict', 'onTopic', 'finalConfidence', 'changedVote', 'responseToOthers', 'finalReasoning', 'spoken'],
 } as const;
 
 export function parseModelJson(text: string): unknown {
@@ -83,6 +106,7 @@ export function readRound1(model: JuryModel, role: string, text: string): Round1
     onTopic: parsed.onTopic,
     confidence: parsed.confidence,
     reasoning: parsed.reasoning,
+    spoken: spokenLine(parsed.spoken, parsed.reasoning),
     keyBasis: parsed.keyBasis,
     limitations: parsed.limitations,
   };
@@ -104,5 +128,6 @@ export function applyDeliberation(own: Round1Analysis, text: string): JuryVote {
     reasoning: parsed.finalReasoning,
     limitations: own.limitations,
     responseToOthers: parsed.responseToOthers,
+    spoken: spokenLine(parsed.spoken, parsed.responseToOthers || parsed.finalReasoning),
   };
 }

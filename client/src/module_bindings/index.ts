@@ -41,6 +41,7 @@ import CreateRoomReducer from "./create_room_reducer";
 import EndRoundReducer from "./end_round_reducer";
 import JoinRoomReducer from "./join_room_reducer";
 import RecordClaimReducer from "./record_claim_reducer";
+import RecordClaimIdeaReducer from "./record_claim_idea_reducer";
 import RecordFactCheckReducer from "./record_fact_check_reducer";
 import RecordParticipantReducer from "./record_participant_reducer";
 import RecordRoomReducer from "./record_room_reducer";
@@ -55,6 +56,7 @@ import SubmitFactCheckReducer from "./submit_fact_check_reducer";
 
 // Import all table schema definitions
 import ClaimRow from "./claim_table";
+import ClaimIdeaRow from "./claim_idea_table";
 import FactCheckRow from "./fact_check_table";
 import FactCheckUsageRow from "./fact_check_usage_table";
 import FactCheckVoteRow from "./fact_check_vote_table";
@@ -86,6 +88,21 @@ const tablesSchema = __schema({
       { name: 'claim_id_key', constraint: 'unique', columns: ['id'] },
     ],
   }, ClaimRow),
+  claimIdea: __table({
+    name: 'claim_idea',
+    indexes: [
+      { accessor: 'claimId', name: 'claim_idea_claim_id_idx_btree', algorithm: 'btree', columns: [
+        'claimId',
+      ] },
+      { accessor: 'by_round_speaker', name: 'claim_idea_round_id_speaker_id_idx_btree', algorithm: 'btree', columns: [
+        'roundId',
+        'speakerId',
+      ] },
+    ],
+    constraints: [
+      { name: 'claim_idea_claim_id_key', constraint: 'unique', columns: ['claimId'] },
+    ],
+  }, ClaimIdeaRow),
   factCheck: __table({
     name: 'fact_check',
     indexes: [
@@ -259,6 +276,7 @@ const reducersSchema = __reducers(
   __reducerSchema("end_round", EndRoundReducer),
   __reducerSchema("join_room", JoinRoomReducer),
   __reducerSchema("record_claim", RecordClaimReducer),
+  __reducerSchema("record_claim_idea", RecordClaimIdeaReducer),
   __reducerSchema("record_fact_check", RecordFactCheckReducer),
   __reducerSchema("record_participant", RecordParticipantReducer),
   __reducerSchema("record_room", RecordRoomReducer),

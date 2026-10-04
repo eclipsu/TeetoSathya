@@ -38,6 +38,7 @@ export function TeamColumn({ team, snapshot, myId, canTakeSeat, onTakeSeat, onHo
               isMe={!!p && p.id === myId}
               inHotSeat={!!p && p.id === hot}
               considering={!!p && snapshot.game.consideringIds.includes(p.id)}
+              out={!!p && snapshot.game.eliminatedIds.includes(p.id)}
               onTake={canTakeSeat ? () => onTakeSeat(team) : undefined}
               onHotSeat={p && onHotSeat ? () => onHotSeat(team, p.id) : undefined}
             />

@@ -5,6 +5,8 @@ import { spacetimeConnection } from './hosted';
 const pending = new Map<string, Room>();
 let timer: ReturnType<typeof setTimeout> | null = null;
 let writing = false;
+/** Set when the hosted module predates the claim_idea table; stops retrying until restart. */
+let ideaTableMissing = false;
 
 function sideName(team: TeamIndex | null, role: Participant['role']): string {
   if (role === 'spectator') return 'SPECTATOR';
@@ -131,6 +133,22 @@ async function writeRoom(room: Room): Promise<void> {
         claim: claim.text,
         originalText: claim.originalText,
         createdAtMs: BigInt(claim.createdAt),
+      });
+      // The idea's live state in the speaker's buffer: latest wording, relevance, eviction.
+      // Isolated: a database not yet re-published without claim_idea must not block the rest of the history.
+      if (!ideaTableMissing) await conn.reducers.recordClaimIdea({
+        claimId: claim.id,
+        roomId: room.id,
+        roundId: `${room.id}:${claim.roundSeq}`,
+        speakerId: speaker.id,
+        text: claim.text,
+        relevance: claim.relevance,
+        admittedAtMs: BigInt(claim.createdAt),
+        updatedAtMs: BigInt(claim.updatedAt ?? 0),
+        evictedAtMs: BigInt(claim.evictedAt ?? 0),
+      }).catch((err: unknown) => {
+        ideaTableMissing = true;
+        console.warn('[spacetime] claim buffer not recorded (re-publish the module to add claim_idea):', safeError(err));
       });
     }
     for (const check of checks) {

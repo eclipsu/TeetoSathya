@@ -38,7 +38,7 @@ export function toSnapshot(room: Room, now: number): RoomSnapshot {
   }));
   const g = room.game;
   const game: GameView = {
-    round: g.roundSeq,
+    round: g.roundNumber,
     hotSeat: [idOf(g.hotSeat[0]), idOf(g.hotSeat[1])],
     activeSide: g.activeSide,
     clocks: [g.clocks[0], g.clocks[1]],
@@ -58,6 +58,14 @@ export function toSnapshot(room: Room, now: number): RoomSnapshot {
     factCheckUsedIds: [...g.factCheckUsed].map((sid) => idOf(sid)).filter((id): id is string => !!id),
     consideringIds: [...g.considering].map((sid) => idOf(sid)).filter((id): id is string => !!id),
     scores: [g.scores[0], g.scores[1]],
+    intro: g.intro ? { text: g.intro.text, until: g.intro.until } : null,
+    eliminatedIds: [...g.eliminated].map((sid) => idOf(sid)).filter((id): id is string => !!id),
+    roundClaim: g.roundClaim && g.roundOpener ? { text: g.roundClaim.text, speakerId: idOf(g.roundOpener) ?? '' } : null,
+    openerId: idOf(g.roundOpener),
+    intermission: g.intermission
+      ? { until: g.intermission.until, nextRound: g.intermission.nextRound, openingSide: g.intermission.openingSide, openerId: idOf(g.intermission.openerSessionId), endedBy: g.intermission.endedBy, outTeam: g.intermission.outTeam }
+      : null,
+    roundLog: g.roundLog.map((r) => ({ ...r })),
     winner: room.status === 'ended' ? g.winner : null,
   };
   return { id: room.id, topic: room.topic, sides: room.sides, status: room.status, settings: room.settings, participants, game, serverNow: now };

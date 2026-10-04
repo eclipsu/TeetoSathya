@@ -1,7 +1,7 @@
 import { nanoid } from "nanoid";
 import type { TeamIndex } from "@teeto/shared";
 import { config } from "../config";
-import { appendTranscript, mergeClaims } from "../domain/factcheck";
+import { appendTranscript, getRecentClaims, mergeClaims } from "../domain/factcheck";
 import { persistRoom } from "../spacetime/archive";
 import type { Room } from "../domain/model";
 import type { AppSocket, RoomHub } from "../socket/hub";
@@ -246,7 +246,7 @@ export class Transcription {
       setTimeout(() => {
         this.partialTimers.delete(key);
         this.takePartial(target);
-      }, 1200),
+      }, 800),
     );
   }
 
@@ -302,7 +302,7 @@ export class Transcription {
     this.hub.io
       .to(target.roomId)
       .emit("transcript:interim", { speakerId: target.publicId, text: "" });
-    if (combined.length >= 240) {
+    if (combined.length >= 160) {
       this.clearTimer(key);
       void this.enqueue(key, () => this.extractPending(key));
     } else this.schedule(key);
@@ -315,7 +315,7 @@ export class Transcription {
       setTimeout(() => {
         this.timers.delete(key);
         void this.enqueue(key, () => this.extractPending(key));
-      }, 700),
+      }, 350),
     );
   }
 
@@ -344,9 +344,17 @@ export class Transcription {
     this.pending.set(key, "");
     const meta = this.meta.get(key);
     if (!meta) return;
+    // Context: what this speaker said just before (for "that number", "they"…), their live ideas
+    // (so a restatement refines one instead of adding a near-duplicate), and the topic.
+    const uttered = this.uttered.get(key) ?? "";
+    const earlier = uttered.endsWith(text) ? uttered.slice(0, -text.length) : uttered;
+    const room = await this.hub.store.get(meta.roomId);
+    const ideas = room && room.game.roundSeq === meta.roundSeq
+      ? getRecentClaims(room, meta.sessionId).map((c) => ({ id: c.id, text: c.text }))
+      : [];
     let drafts;
     try {
-      drafts = await extractClaims(text, AbortSignal.timeout(22_000));
+      drafts = await extractClaims(text, AbortSignal.timeout(22_000), { topic: room?.topic, earlier: earlier.slice(-1200), ideas });
     } catch (err) {
       console.warn("[claims] extraction failed:", (err as Error).message);
       const newer = this.pending.get(key) ?? "";
@@ -363,7 +371,7 @@ export class Transcription {
       )
         return null;
       if (!room.participants.has(meta.sessionId)) return null;
-      const added = mergeClaims(
+      const change = mergeClaims(
         room,
         drafts.map((d) => ({
           id: nanoid(10),
@@ -372,10 +380,14 @@ export class Transcription {
           speakerSessionId: meta.sessionId,
           team: meta.team,
           createdAt: now,
+          relevance: d.relevance,
+          sameAs: d.sameAs,
         })),
+        now,
       );
-      if (added.length) {
-        console.log(`[claims] ${meta.publicId} +${added.length}`);
+      const { added, refined, evicted } = change;
+      if (added.length || refined.length || evicted.length) {
+        console.log(`[claims] ${meta.publicId} +${added.length} ~${refined.length} -${evicted.length}`);
         persistRoom(room);
       }
       return null;

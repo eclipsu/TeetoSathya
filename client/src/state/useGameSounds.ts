@@ -48,6 +48,14 @@ export function useGameSounds(s: RoomSnapshot | null) {
     }
   }, [s?.status]);
 
+  // Rounds 2+: chime when the next round begins (round 1 is the lobby → live chime above).
+  const prevRound = useRef(g?.round ?? 0);
+  useEffect(() => {
+    const before = prevRound.current;
+    prevRound.current = g?.round ?? 0;
+    if (live && before > 0 && (g?.round ?? 0) > before) playRoundStart();
+  }, [g?.round]);
+
   // Host broke a tie after the round ended. `wasEnded` is last commit's status, so the
   // snapshot that ends the round with a winner doesn't play the clip twice.
   const prevWinner = useRef(g?.winner ?? null);

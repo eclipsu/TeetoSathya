@@ -32,6 +32,7 @@ function analysis(model: JuryModel, verdict: Round1Analysis['verdict']): Round1A
     onTopic: true,
     confidence: 0.8,
     reasoning: `${model} reasoning`,
+    spoken: `${model} says so`,
     keyBasis: [`${model} basis`],
     limitations: [`${model} limitation`],
   };
@@ -163,7 +164,7 @@ describe('challenge outcome', () => {
     if (!game.startRound(room, 1_000_000).ok) throw new Error('round did not start');
     room.game.claims.push({
       id: 'c1', roomId: room.id, text: 'The capital of Australia is Sydney.', originalText: 'The capital of Australia is Sydney.',
-      speakerSessionId: room.hostSessionId, team: 0, createdAt: 1, roundSeq: room.game.roundSeq,
+      speakerSessionId: room.hostSessionId, team: 0, createdAt: 1, roundSeq: room.game.roundSeq, relevance: 1, updatedAt: null, evictedAt: null,
     });
     expect(openFactCheck(room, 'sess-b2-00001', 'c1', 1_001_000, 'fc1').ok).toBe(true);
     const resolved = resolveFactCheck(room, 'fc1', {
@@ -189,5 +190,14 @@ describe('challenge outcome', () => {
       expect(resolved.challenge.juryPhase).toBeNull();
       expect(resolved.challenge.jury?.votes).toHaveLength(3);
     }
+  });
+});
+
+describe('one cycle for settled facts', () => {
+  it('skips the reply round when every juror already agrees confidently', async () => {
+    const { settledAtOnce } = await import('../services/factChecking/jury');
+    expect(settledAtOnce([{ verdict: 'INCORRECT', confidence: 0.97 }, { verdict: 'INCORRECT', confidence: 0.92 }])).toBe(true);
+    expect(settledAtOnce([{ verdict: 'INCORRECT', confidence: 0.97 }, { verdict: 'INCORRECT', confidence: 0.7 }])).toBe(false);
+    expect(settledAtOnce([{ verdict: 'INCORRECT', confidence: 0.97 }, { verdict: 'CORRECT', confidence: 0.95 }])).toBe(false);
   });
 });
