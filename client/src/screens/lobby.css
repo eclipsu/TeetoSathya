@@ -201,3 +201,18 @@
   .room-card--create { grid-row: auto; min-height: 160px; }
   .lobby-empty { grid-template-columns: 1fr; gap: var(--s5); min-height: 0; }
 }
+
+/* Live strip on a room card, read from SpacetimeDB's live index */
+.live-strip { display: grid; gap: 4px; padding: var(--s2) var(--s3); border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface-raised); font-size: 0.8125rem; }
+.live-strip__top { display: flex; align-items: center; gap: var(--s2); flex-wrap: wrap; }
+.live-strip__phase { font-weight: 600; }
+.live-strip__phase--fact_check, .live-strip__phase--tiebreak { color: var(--warn); }
+.live-strip__phase--live { color: var(--ok); }
+.live-strip__round { color: var(--text-dim); }
+.live-strip__score { margin-left: auto; display: inline-flex; align-items: center; gap: 5px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.live-strip__score .dot { width: 6px; height: 6px; }
+.live-strip__dash { color: var(--text-faint); font-weight: 400; }
+.live-strip__line { display: flex; align-items: center; gap: 6px; margin: 0; color: var(--text-dim); }
+.live-strip__line .dot { width: 6px; height: 6px; }
+.live-strip__claim { margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.live-strip__board { justify-self: start; }

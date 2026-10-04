@@ -35,6 +35,14 @@ export const ClaimIdea = __t.object("ClaimIdea", {
 });
 export type ClaimIdea = __Infer<typeof ClaimIdea>;
 
+export const DebateContext = __t.object("DebateContext", {
+  roomId: __t.string(),
+  recentLines: __t.string(),
+  recentVerdicts: __t.string(),
+  updatedAtMs: __t.i64(),
+});
+export type DebateContext = __Infer<typeof DebateContext>;
+
 export const FactCheck = __t.object("FactCheck", {
   id: __t.string(),
   roomId: __t.string(),
@@ -105,6 +113,31 @@ export const GameState = __t.object("GameState", {
   paused: __t.bool(),
 });
 export type GameState = __Infer<typeof GameState>;
+
+export const LiveDebate = __t.object("LiveDebate", {
+  roomId: __t.string(),
+  topic: __t.string(),
+  teamALabel: __t.string(),
+  teamBLabel: __t.string(),
+  phase: __t.string(),
+  round: __t.i32(),
+  totalRounds: __t.i32(),
+  scoreA: __t.i32(),
+  scoreB: __t.i32(),
+  speakerName: __t.string(),
+  speakerSide: __t.string(),
+  roundClaim: __t.string(),
+  players: __t.i32(),
+  listeners: __t.i32(),
+  winner: __t.string(),
+  updatedAtMs: __t.i64(),
+});
+export type LiveDebate = __Infer<typeof LiveDebate>;
+
+export const ModuleOwner = __t.object("ModuleOwner", {
+  identity: __t.identity(),
+});
+export type ModuleOwner = __Infer<typeof ModuleOwner>;
 
 export const Participant = __t.object("Participant", {
   participantId: __t.string(),

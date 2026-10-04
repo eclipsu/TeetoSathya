@@ -45,16 +45,9 @@ function tone(freq: number, start: number, dur: number, type: OscillatorType, ga
   osc.stop(start + dur + 0.02);
 }
 
-/** Game-show buzzer: two short detuned square-wave blasts. */
+/** A spectator buzzed in (ElevenLabs sound, buzz.mp3). */
 export function playBuzz() {
-  if (!enabled) return;
-  primeAudio();
-  if (!ctx) return;
-  const t = ctx.currentTime + 0.01;
-  tone(196, t, 0.22, 'square', 0.12);
-  tone(207, t, 0.22, 'square', 0.08);
-  tone(196, t + 0.26, 0.32, 'square', 0.12);
-  tone(207, t + 0.26, 0.32, 'square', 0.08);
+  playClip('buzz', { volume: 0.8 });
 }
 
 /** Soft chime when the floor passes to you. */
@@ -96,7 +89,7 @@ export function playWhoosh() {
 
 // ---- Clips (client/public/sounds) ----
 
-const CLIPS = ['start', 'tick', 'tick-fast', 'timesup', 'correct', 'fail', 'winner'] as const;
+const CLIPS = ['start', 'tick', 'tick-fast', 'timesup', 'correct', 'fail', 'winner', 'buzz', 'challenge', 'tiebreak', 'jury-thinking'] as const;
 type ClipName = (typeof CLIPS)[number];
 const SOUND_BASE = `${import.meta.env.BASE_URL}sounds/`;
 const clips = new Map<ClipName, HTMLAudioElement>();
@@ -126,6 +119,7 @@ function stopClip(name: ClipName) {
 function stopAllClips() {
   CLIPS.forEach(stopClip);
   tickLoop = null;
+  juryLoop = false;
 }
 
 /** Play a clip from the start. `maxMs` cuts it short with a 300ms fade. */
@@ -160,6 +154,26 @@ export const playTimesUp = (long = false) => playClip('timesup', { maxMs: long ?
 export const playFactCorrect = () => playClip('correct');
 export const playFactIncorrect = () => playClip('fail');
 export const playWinner = () => playClip('winner', { volume: 0.8 });
+/** Someone called a fact check: the challenge card slides in. */
+export const playChallenge = () => playClip('challenge', { volume: 0.8 });
+/** The jurors split: tie-break. */
+export const playTiebreak = () => playClip('tiebreak', { volume: 0.8 });
+
+let juryLoop = false;
+/** Quiet suspense bed under the jurors while they think. Their voices play over it. */
+export function setJuryThinkingLoop(on: boolean) {
+  if (!enabled) on = false;
+  if (on === juryLoop) return;
+  juryLoop = on;
+  if (!on) return stopClip('jury-thinking');
+  const a = clip('jury-thinking');
+  a.loop = true;
+  a.volume = 0.22;
+  a.currentTime = 0;
+  a.play().catch(() => {
+    juryLoop = false; // retry on the next state change
+  });
+}
 
 let tickLoop: 'tick' | 'tick-fast' | null = null;
 /** Looping countdown tick for the active turn clock: slow under 30s, fast under 10s, null = silent. */

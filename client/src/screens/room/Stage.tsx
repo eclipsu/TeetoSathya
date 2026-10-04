@@ -3,7 +3,7 @@ import type { BuzzView, FactCheckView, RoomSnapshot, TeamIndex } from '@teeto/sh
 import { Avatar } from '../../components/Avatar';
 import { PlayIcon } from '../../components/icons';
 import { Timer } from '../../components/Timer';
-import { playWhoosh } from '../../lib/sfx';
+import { playChallenge, playWhoosh } from '../../lib/sfx';
 import { roundRemaining, useServerNow } from '../../state/clock';
 import { ChallengeCard, type TiebreakControls } from './FactCheck';
 import { HotSeatCard } from './HotSeatCard';
@@ -86,7 +86,8 @@ export function Stage({ snapshot: s, myId, isHost, onDone, onStart, starting = f
   const seenKey = useRef<string | null | undefined>(undefined);
   useEffect(() => {
     const key = center?.kind === 'pick' ? null : center?.key ?? null;
-    if (seenKey.current !== undefined && key && key !== seenKey.current) playWhoosh();
+    // A fact check gets the objection sting; a buzz card keeps the whoosh (the buzz has its own sound).
+    if (seenKey.current !== undefined && key && key !== seenKey.current) (key.startsWith('f:') ? playChallenge : playWhoosh)();
     seenKey.current = key;
   }, [center?.kind === 'pick' ? null : center?.key]);
 

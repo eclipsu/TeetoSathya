@@ -20,6 +20,12 @@ export function usePath(): string {
   );
 }
 
+/** /board/<room>: the live board, fed only by SpacetimeDB. */
+export function matchBoard(path: string): string | null {
+  const m = /^\/board\/([a-z0-9]{4,16})\/?$/i.exec(path);
+  return m ? m[1]! : null;
+}
+
 export function matchRoom(path: string): string | null {
   const m = /^\/room\/([a-z0-9]{4,16})\/?$/i.exec(path);
   return m ? m[1]! : null;

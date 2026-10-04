@@ -38,6 +38,7 @@ import AddClaimReducer from "./add_claim_reducer";
 import AppendTranscriptReducer from "./append_transcript_reducer";
 import ContinueVerdictReducer from "./continue_verdict_reducer";
 import CreateRoomReducer from "./create_room_reducer";
+import DropLiveDebateReducer from "./drop_live_debate_reducer";
 import EndRoundReducer from "./end_round_reducer";
 import JoinRoomReducer from "./join_room_reducer";
 import RecordClaimReducer from "./record_claim_reducer";
@@ -51,17 +52,21 @@ import ResolveFactCheckReducer from "./resolve_fact_check_reducer";
 import SetRoleReducer from "./set_role_reducer";
 import StartRoundReducer from "./start_round_reducer";
 import SubmitFactCheckReducer from "./submit_fact_check_reducer";
+import UpsertDebateContextReducer from "./upsert_debate_context_reducer";
+import UpsertLiveDebateReducer from "./upsert_live_debate_reducer";
 
 // Import all procedure arg schemas
 
 // Import all table schema definitions
 import ClaimRow from "./claim_table";
 import ClaimIdeaRow from "./claim_idea_table";
+import DebateContextRow from "./debate_context_table";
 import FactCheckRow from "./fact_check_table";
 import FactCheckUsageRow from "./fact_check_usage_table";
 import FactCheckVoteRow from "./fact_check_vote_table";
 import GameEventRow from "./game_event_table";
 import GameStateRow from "./game_state_table";
+import LiveDebateRow from "./live_debate_table";
 import ParticipantRow from "./participant_table";
 import RoomRow from "./room_table";
 import RoundRow from "./round_table";
@@ -103,6 +108,17 @@ const tablesSchema = __schema({
       { name: 'claim_idea_claim_id_key', constraint: 'unique', columns: ['claimId'] },
     ],
   }, ClaimIdeaRow),
+  debateContext: __table({
+    name: 'debate_context',
+    indexes: [
+      { accessor: 'roomId', name: 'debate_context_room_id_idx_btree', algorithm: 'btree', columns: [
+        'roomId',
+      ] },
+    ],
+    constraints: [
+      { name: 'debate_context_room_id_key', constraint: 'unique', columns: ['roomId'] },
+    ],
+  }, DebateContextRow),
   factCheck: __table({
     name: 'fact_check',
     indexes: [
@@ -175,6 +191,20 @@ const tablesSchema = __schema({
       { name: 'game_state_room_id_key', constraint: 'unique', columns: ['roomId'] },
     ],
   }, GameStateRow),
+  liveDebate: __table({
+    name: 'live_debate',
+    indexes: [
+      { accessor: 'by_phase', name: 'live_debate_phase_idx_btree', algorithm: 'btree', columns: [
+        'phase',
+      ] },
+      { accessor: 'roomId', name: 'live_debate_room_id_idx_btree', algorithm: 'btree', columns: [
+        'roomId',
+      ] },
+    ],
+    constraints: [
+      { name: 'live_debate_room_id_key', constraint: 'unique', columns: ['roomId'] },
+    ],
+  }, LiveDebateRow),
   participant: __table({
     name: 'participant',
     indexes: [
@@ -273,6 +303,7 @@ const reducersSchema = __reducers(
   __reducerSchema("append_transcript", AppendTranscriptReducer),
   __reducerSchema("continue_verdict", ContinueVerdictReducer),
   __reducerSchema("create_room", CreateRoomReducer),
+  __reducerSchema("drop_live_debate", DropLiveDebateReducer),
   __reducerSchema("end_round", EndRoundReducer),
   __reducerSchema("join_room", JoinRoomReducer),
   __reducerSchema("record_claim", RecordClaimReducer),
@@ -286,6 +317,8 @@ const reducersSchema = __reducers(
   __reducerSchema("set_role", SetRoleReducer),
   __reducerSchema("start_round", StartRoundReducer),
   __reducerSchema("submit_fact_check", SubmitFactCheckReducer),
+  __reducerSchema("upsert_debate_context", UpsertDebateContextReducer),
+  __reducerSchema("upsert_live_debate", UpsertLiveDebateReducer),
 );
 
 /** The schema information for all procedures in this module. This is defined the same way as the procedures would have been defined in the server. */

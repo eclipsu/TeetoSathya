@@ -1,0 +1,37 @@
+/* Live board: a second screen fed only by SpacetimeDB */
+.board { width: min(1280px, 100%); margin: 0 auto; padding: var(--s5) var(--s4) var(--s7); display: flex; flex-direction: column; gap: var(--s4); }
+.board__head { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: var(--s3); }
+.board__kicker { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s3); margin: 0 0 var(--s1); font-size: var(--fs-label); color: var(--text-dim); }
+.board__phase { padding: 1px 8px; border-radius: var(--radius-pill); border: 1px solid var(--border); color: var(--text); font-weight: 600; }
+.board__phase--fact_check, .board__phase--tiebreak { border-color: var(--warn); color: var(--warn); }
+.board__phase--live { border-color: var(--ok); color: var(--ok); }
+.board__topic { margin: 0; font-size: var(--fs-display); letter-spacing: -0.02em; line-height: 1.15; }
+.board__source { margin: 0; font-size: var(--fs-caption); color: var(--text-faint); white-space: nowrap; }
+.board__score { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s4); }
+.board__team { display: flex; align-items: center; justify-content: space-between; gap: var(--s3); padding: var(--s4) var(--s5); border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); }
+.board__team--0.is-winner { border-color: var(--team-a); }
+.board__team--1.is-winner { border-color: var(--team-b); }
+.board__team-name { display: inline-flex; align-items: center; gap: var(--s2); font-weight: 600; }
+.board__team-score { font-size: clamp(2rem, 4vw, 3.25rem); font-weight: 700; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+.board__winner { font-size: var(--fs-caption); font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ok); }
+.board__now { display: grid; gap: var(--s2); padding: var(--s3) var(--s5); border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); }
+.board__speaker { display: flex; align-items: center; gap: var(--s2); margin: 0; font-weight: 600; }
+.board__claim { margin: 0; font-size: 1.0625rem; }
+.board__label { display: flex; align-items: center; gap: var(--s2); margin: 0 0 var(--s2); font-size: var(--fs-label); font-weight: 500; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-dim); }
+.board__claim .board__label { display: inline; margin-right: var(--s2); }
+.board__ideas, .board__feed { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s4); align-items: start; }
+.board__col { padding: var(--s4); border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); min-width: 0; }
+.board__col ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--s1); }
+.board__speaker-ideas + .board__speaker-ideas { margin-top: var(--s3); padding-top: var(--s3); border-top: 1px solid var(--border); }
+.board__who { margin: 0 0 var(--s1); font-weight: 600; font-size: 0.875rem; }
+.board__who span { margin-left: var(--s1); font-weight: 400; color: var(--text-faint); font-variant-numeric: tabular-nums; }
+.board__idea { display: flex; justify-content: space-between; gap: var(--s3); padding: 4px 8px; border-radius: var(--radius-sm); background: var(--surface-raised); font-size: 0.8125rem; animation: fade-in var(--dur) var(--ease); }
+.board__idea.is-evicted { background: none; color: var(--text-faint); text-decoration: line-through; }
+.board__rel { flex: none; color: var(--text-faint); font-variant-numeric: tabular-nums; }
+.board__verdict, .board__line { font-size: 0.8125rem; line-height: 1.45; padding: 4px 0; border-bottom: 1px solid var(--border); overflow-wrap: anywhere; }
+.board__empty { margin: 0; font-size: 0.8125rem; color: var(--text-faint); }
+@media (max-width: 800px) {
+  .board__head { grid-template-columns: auto minmax(0, 1fr); }
+  .board__source { grid-column: 1 / -1; }
+  .board__score, .board__ideas, .board__feed { grid-template-columns: minmax(0, 1fr); }
+}

@@ -9,6 +9,7 @@ import { navigate } from '../lib/router';
 import { forgetHostToken, getHostToken, getSession } from '../lib/session';
 import { CreateRoomModal } from './CreateRoomModal';
 import './lobby.css';
+import { LiveCardInfo } from '../spacetime/live';
 
 const POLL_MS = 3000;
 
@@ -112,6 +113,7 @@ export function Lobby({ onChangeName }: { onChangeName: () => void }) {
                         <span className="side-pill"><span className="dot dot--a" /><span>{r.sides[0]}</span></span>
                         <span className="side-pill"><span className="dot dot--b" /><span>{r.sides[1]}</span></span>
                       </div>
+                      <LiveCardInfo roomId={r.id} />
                       <dl className="floor__meta">
                         <div><dt className="sr-only">Seats</dt><dd><UsersIcon /> {r.speakerCounts[0]}/{r.settings.speakersPerTeamMax} · {r.speakerCounts[1]}/{r.settings.speakersPerTeamMax}</dd></div>
                         <div><dt className="sr-only">Spectators</dt><dd><EyeIcon /> {r.spectatorCount}</dd></div>

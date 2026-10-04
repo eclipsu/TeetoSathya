@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import type { RoomSnapshot } from '@teeto/shared';
-import { playFactCorrect, playFactIncorrect, playRoundStart, playTimesUp, playWinner, setTickLoop } from '../lib/sfx';
+import { playFactCorrect, playFactIncorrect, playRoundStart, playTiebreak, playTimesUp, playWinner, setJuryThinkingLoop, setTickLoop } from '../lib/sfx';
 import { sideRemaining, useServerNow } from './clock';
 
 /** Room sound cues driven by state: round start/end, countdown ticks, time's up, fact-check verdicts. */
@@ -15,6 +15,19 @@ export function useGameSounds(s: RoomSnapshot | null) {
   const tick = ms === null || ms <= 0 ? null : ms <= 10_000 ? 'tick-fast' : ms <= 30_000 ? 'tick' : null;
   useEffect(() => { setTickLoop(tick); }, [tick]);
   useEffect(() => () => setTickLoop(null), []);
+
+  // Suspense bed while the jury is thinking; it stops as soon as there's a verdict or a split.
+  const juryThinking = live && g?.factCheck?.status === 'checking';
+  useEffect(() => { setJuryThinkingLoop(!!juryThinking); }, [juryThinking]);
+  useEffect(() => () => setJuryThinkingLoop(false), []);
+
+  // Jury split: tie-break sting, once per check (not when joining mid-tie-break).
+  const splitKey = g?.factCheck?.status === 'tiebreak' ? g.factCheck.id : null;
+  const prevSplit = useRef<string | null | undefined>(undefined);
+  useEffect(() => {
+    if (prevSplit.current !== undefined && splitKey && splitKey !== prevSplit.current) playTiebreak();
+    prevSplit.current = splitKey;
+  }, [splitKey]);
 
   // Time's up once per running turn: when the local clock reaches zero, or (if the server
   // switched turns before we sampled zero) when the side that just stopped is frozen at 0.

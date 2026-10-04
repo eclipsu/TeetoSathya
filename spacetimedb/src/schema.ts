@@ -15,6 +15,63 @@ const room = table(
   },
 );
 
+/** Whoever first published this database. Private: lets a fresh database (local dev) accept its publisher's writes. */
+const moduleOwner = table(
+  { name: 'module_owner', public: false },
+  {
+    identity: t.identity().primaryKey(),
+  },
+);
+
+/**
+ * The live index of every debate: one small row per room, kept current by the game server.
+ * The lobby subscribes to the rows that aren't over, so many concurrent debates stay cheap to list.
+ */
+const liveDebate = table(
+  {
+    name: 'live_debate',
+    public: true,
+    indexes: [{ accessor: 'by_phase', algorithm: 'btree', columns: ['phase'] }],
+  },
+  {
+    roomId: t.string().primaryKey(),
+    topic: t.string(),
+    teamALabel: t.string(),
+    teamBLabel: t.string(),
+    /** LOBBY, LIVE, FACT_CHECK, TIEBREAK, BREAK, ENDED */
+    phase: t.string(),
+    round: t.i32(),
+    totalRounds: t.i32(),
+    scoreA: t.i32(),
+    scoreB: t.i32(),
+    speakerName: t.string(),
+    /** TEAM_A, TEAM_B or NONE */
+    speakerSide: t.string(),
+    roundClaim: t.string(),
+    players: t.i32(),
+    listeners: t.i32(),
+    /** Winner when ENDED: TEAM_A, TEAM_B, DRAW or NONE (tie, host to pick). */
+    winner: t.string(),
+    updatedAtMs: t.i64(),
+  },
+);
+
+/**
+ * Each debate's working context, one row per room: the last spoken lines and the latest verdicts.
+ * One indexed lookup by roomId gives any viewer (or a restarted service) the state of the argument.
+ */
+const debateContext = table(
+  { name: 'debate_context', public: true },
+  {
+    roomId: t.string().primaryKey(),
+    /** Most recent transcript lines, oldest first, as "Name: text" separated by newlines. */
+    recentLines: t.string(),
+    /** Most recent fact-check results, newest first, as "Name challenged Name: claim → result" lines. */
+    recentVerdicts: t.string(),
+    updatedAtMs: t.i64(),
+  },
+);
+
 /** Host token never leaves the database. Clients cannot subscribe. */
 const roomSecret = table(
   { name: 'room_secret', public: false },
@@ -283,6 +340,9 @@ const scheduleRound = table(
 );
 
 const spacetimedb = schema({
+  moduleOwner,
+  liveDebate,
+  debateContext,
   room,
   roomSecret,
   participant,

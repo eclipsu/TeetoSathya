@@ -21,6 +21,7 @@ const OWNER = Identity.fromString('c20002bab8da1ad231e9177ff895c3095c3668655cb3f
 
 function assertOwner(ctx: Ctx): void {
   if (ctx.sender.equals(OWNER) || ctx.sender.equals(ctx.databaseIdentity)) return;
+  if (ctx.db.moduleOwner.identity.find(ctx.sender)) return;
   throw new SenderError('unauthorized');
 }
 
@@ -136,7 +137,10 @@ function resumePlaying(ctx: Ctx, roomId: string, speakerId: string, side: string
   scheduleRoundEnd(ctx, roomId, roundEndsAtMs);
 }
 
-export const init = spacetimedb.init(_ctx => {});
+/** The publisher of a fresh database owns it (local dev); the hard-coded OWNER still owns Maincloud. */
+export const init = spacetimedb.init((ctx) => {
+  if (!ctx.db.moduleOwner.identity.find(ctx.sender)) ctx.db.moduleOwner.insert({ identity: ctx.sender });
+});
 export const onConnect = spacetimedb.clientConnected(_ctx => {});
 export const onDisconnect = spacetimedb.clientDisconnected(_ctx => {});
 
@@ -807,6 +811,50 @@ export const recordClaim = spacetimedb.reducer(
     });
   },
 );
+
+/** The live index: one row per debate, replaced on every change. */
+export const upsertLiveDebate = spacetimedb.reducer(
+  {
+    roomId: t.string(),
+    topic: t.string(),
+    teamALabel: t.string(),
+    teamBLabel: t.string(),
+    phase: t.string(),
+    round: t.i32(),
+    totalRounds: t.i32(),
+    scoreA: t.i32(),
+    scoreB: t.i32(),
+    speakerName: t.string(),
+    speakerSide: t.string(),
+    roundClaim: t.string(),
+    players: t.i32(),
+    listeners: t.i32(),
+    winner: t.string(),
+    updatedAtMs: t.i64(),
+  },
+  (ctx, row) => {
+    assertOwner(ctx);
+    if (ctx.db.liveDebate.roomId.find(row.roomId)) ctx.db.liveDebate.roomId.update(row);
+    else ctx.db.liveDebate.insert(row);
+  },
+);
+
+/** Each debate's rolling context (recent lines and verdicts), replaced on every change. */
+export const upsertDebateContext = spacetimedb.reducer(
+  { roomId: t.string(), recentLines: t.string(), recentVerdicts: t.string(), updatedAtMs: t.i64() },
+  (ctx, row) => {
+    assertOwner(ctx);
+    if (ctx.db.debateContext.roomId.find(row.roomId)) ctx.db.debateContext.roomId.update(row);
+    else ctx.db.debateContext.insert(row);
+  },
+);
+
+/** A room closed: it leaves the live index and its context. History tables keep the record. */
+export const dropLiveDebate = spacetimedb.reducer({ roomId: t.string() }, (ctx, { roomId }) => {
+  assertOwner(ctx);
+  ctx.db.liveDebate.roomId.delete(roomId);
+  ctx.db.debateContext.roomId.delete(roomId);
+});
 
 /** Mirror of the server's claim buffer. Upsert: refinements and evictions update the same row. */
 export const recordClaimIdea = spacetimedb.reducer(

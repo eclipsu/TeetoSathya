@@ -17,6 +17,7 @@ import { installRoundFlow } from './engine/roundFlow';
 import { installGameReview } from './engine/gameReview';
 import { installTranscription } from './services/transcription';
 import { connectHostedSpacetime } from './spacetime/hosted';
+import { dropRoom } from './spacetime/archive';
 
 const store = new InMemoryRoomStore();
 
@@ -29,6 +30,7 @@ const io: IO = new Server(httpServer, { cors: { origin: true } });
 
 const hub = new RoomHub(io, store);
 hub.onRoomClosed((roomId) => deleteVoiceRoom(roomId).finally(() => forgetVoiceRoom(roomId)));
+hub.onRoomClosed((roomId) => void dropRoom(roomId));
 hub.onRoomChange((room) => {
   closeVoiceIfEnded(room);
   void syncMicPermissions(room);
