@@ -33,9 +33,9 @@ export function canFactCheck(room: Room, sessionId: string): { ok: true } | { ok
     team: p.team,
     activeSide: side,
     publishing: canPublish(room, p),
-    paused: room.game.paused,
+    paused: room.game.paused && room.game.factCheckArmedBy !== sessionId,
     buzzOpen: room.game.buzz !== null,
-    factCheckOpen: room.game.activeFactCheckId !== null,
+    factCheckOpen: room.game.activeFactCheckId !== null || (room.game.factCheckArmedBy !== null && room.game.factCheckArmedBy !== sessionId),
     alreadyUsed: room.game.factCheckUsed.has(sessionId),
     speakerPresent: side !== null && !!room.game.hotSeat[side],
   });
@@ -100,6 +100,25 @@ export type OpenFactCheckResult =
   | { ok: true; challenge: FactCheckChallenge }
   | { ok: false; reason: string };
 
+/** Stop the speaker's mic as soon as Fact Check is clicked, before a claim is chosen. */
+export function armFactCheck(room: Room, sessionId: string, now: number): { ok: true; speakerName: string; challengerName: string } | { ok: false; reason: string } {
+  const gate = canFactCheck(room, sessionId);
+  if (!gate.ok) return gate;
+  const speaker = activeSpeaker(room);
+  const challenger = room.participants.get(sessionId);
+  if (!speaker || !challenger) return { ok: false, reason: 'Nobody is speaking.' };
+  freezeClocks(room, now);
+  room.game.factCheckArmedBy = sessionId;
+  return { ok: true, speakerName: speaker.username, challengerName: challenger.username };
+}
+
+/** Picker closed with no challenge. The speaker's mic comes back. */
+export function disarmFactCheck(room: Room, sessionId: string, now: number): void {
+  if (room.game.factCheckArmedBy !== sessionId || room.game.activeFactCheckId) return;
+  room.game.factCheckArmedBy = null;
+  if (room.status === 'live' && room.game.paused && !room.game.buzz) unfreezeClocks(room, now);
+}
+
 /**
  * Validate and open a challenge. Consumes the challenger's attempt only after
  * every check passes. Freezes clocks the same way pause/buzz do, and does not
@@ -117,6 +136,7 @@ export function openFactCheck(room: Room, challengerSessionId: string, claimId: 
   if (!challenger || challenger.team === null) return { ok: false, reason: 'Join the room first.' };
 
   room.game.factCheckUsed.add(challengerSessionId);
+  room.game.factCheckArmedBy = null;
   freezeClocks(room, now);
   const challenge: FactCheckChallenge = {
     id,

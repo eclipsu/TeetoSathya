@@ -13,6 +13,6 @@ export function canPublish(room: Room, p: Participant): boolean {
   if (p.role !== 'speaker') return false;
   if (room.status !== 'live') return true;
   const g = room.game;
-  if (g.paused || g.buzz || g.activeFactCheckId || g.activeSide === null) return false;
+  if (g.paused || g.buzz || g.activeFactCheckId || g.factCheckArmedBy || g.activeSide === null) return false;
   return g.hotSeat[g.activeSide] === p.sessionId;
 }

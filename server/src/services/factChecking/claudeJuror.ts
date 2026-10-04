@@ -5,12 +5,11 @@ import { ROUND1_JSON_SCHEMA, ROUND2_JSON_SCHEMA, applyDeliberation, readRound1 }
 import { JuryFailure, type Round1Analysis } from './types';
 
 async function generate(system: string, user: string, schema: object, signal: AbortSignal): Promise<string> {
-  if (!config.anthropicApiKey) throw new JuryFailure('ANTHROPIC_API_KEY is not set.');
+  if (!config.anthropicApiKey) throw new JuryFailure('CLAUDE_API_KEY is not set.');
   const client = new Anthropic({ apiKey: config.anthropicApiKey });
   const message = await client.messages.create({
     model: config.anthropicModel,
     max_tokens: 1024,
-    temperature: 0.2,
     system,
     messages: [{ role: 'user', content: user }],
     output_config: { format: { type: 'json_schema', schema: schema as { [key: string]: unknown } } },

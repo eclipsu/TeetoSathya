@@ -25,7 +25,7 @@ import { TeamColumn } from './room/TeamColumn';
 import { HostControlBar } from './room/HostControlBar';
 import { Stage } from './room/Stage';
 import { Summary } from './room/Summary';
-import { FactCheckBanner, FactCheckButton, FactCheckPicker } from './room/FactCheck';
+import { FactChat, FactCheckButton, FactCheckPicker } from './room/FactCheck';
 import './room/room.css';
 import './room/stage.css';
 
@@ -35,6 +35,7 @@ export function RoomScreen({ roomId }: { roomId: string }) {
   const { status, snapshot, me, myId, isHost } = room;
   const [pickerOpen, setPickerOpen] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [demo, setDemo] = useState<{ busy: boolean; gemini: string | null; claude: string | null; claims: string[] }>({ busy: false, gemini: null, claude: null, claims: [] });
   const [factPicker, setFactPicker] = useState<{ open: boolean; loading: boolean; claims: ClaimOption[]; speakerName: string | null; error: string | null; busy: boolean }>({
     open: false, loading: false, claims: [], speakerName: null, error: null, busy: false,
   });
@@ -118,11 +119,31 @@ export function RoomScreen({ roomId }: { roomId: string }) {
     if (!res.ok) toast('warn', res.message);
   }
 
+  async function runDummySummary() {
+    setDemo({ busy: true, gemini: null, claude: null, claims: [] });
+    const res = await room.call('claims:demo', undefined, 20_000);
+    if (!res.ok) {
+      setDemo({ busy: false, gemini: null, claude: null, claims: [] });
+      toast('error', res.message);
+      return;
+    }
+    const claims = Array.isArray(res.claims) ? res.claims.filter((c): c is string => typeof c === 'string') : [];
+    setDemo({
+      busy: false,
+      gemini: typeof res.gemini === 'string' ? res.gemini : null,
+      claude: typeof res.claude === 'string' ? res.claude : null,
+      claims,
+    });
+  }
+
   async function openFactCheck() {
     const gen = ++factGen.current;
     setFactPicker({ open: true, loading: true, claims: [], speakerName: null, error: null, busy: false });
     const res = await room.call('factcheck:options', undefined, 18_000);
-    if (factGen.current !== gen) return;
+    if (factGen.current !== gen) {
+      void room.call('factcheck:cancel');
+      return;
+    }
     if (!res.ok) {
       setFactPicker((p) => ({ ...p, loading: false, error: res.message }));
       return;
@@ -147,6 +168,7 @@ export function RoomScreen({ roomId }: { roomId: string }) {
   function closeFactPicker() {
     factGen.current += 1;
     setFactPicker((p) => ({ ...p, open: false, busy: false }));
+    void room.call('factcheck:cancel');
   }
 
   async function pick(role: 'speaker' | 'spectator', team: TeamIndex | null) {
@@ -174,7 +196,7 @@ export function RoomScreen({ roomId }: { roomId: string }) {
     { state: 'idle' as const, label: 'Connecting…' };
 
   return (
-    <VoiceProvider roomId={roomId} onConnected={() => void room.call('voice:joined')}>
+    <VoiceProvider roomId={roomId} holdMic={!!snapshot.game.factCheck || !!snapshot.game.factCheckArmed} onConnected={() => void room.call('voice:joined')}>
       <FloorCapture socket={room.socket} enabled={holdsFloor} />
       <div className="room" data-status={snapshot.status} data-host={isHost}>
         <header className="room__header">
@@ -221,6 +243,7 @@ export function RoomScreen({ roomId }: { roomId: string }) {
           </main>
         ) : (
           <main className={`room__main ${shaking ? 'is-shaking' : ''}`}>
+            <FactChat items={snapshot.game.factChecks} armed={snapshot.game.factCheckArmed} />
             <TeamColumn team={0} snapshot={snapshot} myId={myId} canTakeSeat={canTakeSeat} onTakeSeat={(t) => pick('speaker', t)} onHotSeat={hotSeatAction} />
             <Stage
               snapshot={snapshot}
@@ -236,9 +259,27 @@ export function RoomScreen({ roomId }: { roomId: string }) {
 
         <SpectatorStrip snapshot={snapshot} myId={myId} />
 
+        {(demo.gemini || demo.claude) && (
+          <section className="factcheck-history" aria-label="Dummy fact summary">
+            <h3>TEMP TEST SUMMARY</h3>
+            <p>Gemini: {demo.gemini}</p>
+            <p>Claude: {demo.claude}</p>
+            {demo.claims.length > 0 && (
+              <ul>
+                {demo.claims.map((claim) => <li key={claim}>{claim}</li>)}
+              </ul>
+            )}
+          </section>
+        )}
+
         <div className="room__footer">
           {snapshot.status === 'live' && (
             <FactCheckButton snapshot={snapshot} myId={myId} onOpen={() => void openFactCheck()} />
+          )}
+          {snapshot.status === 'live' && (
+            <button className="btn btn--sm" type="button" disabled={demo.busy} onClick={() => void runDummySummary()}>
+              {demo.busy ? 'Testing summary…' : 'Test summary'}
+            </button>
           )}
           {snapshot.status !== 'ended' && action && (
             <KeyHintBar action={action} isSpectator={me?.role === 'spectator'} onPress={press} />
@@ -246,7 +287,6 @@ export function RoomScreen({ roomId }: { roomId: string }) {
           {isHost && <HostControlBar snapshot={snapshot} hostCall={hostCall} onDelete={deleteRoom} />}
         </div>
 
-        <FactCheckBanner factCheck={snapshot.game.factCheck} />
         <FactCheckPicker
           open={factPicker.open}
           speakerName={factPicker.speakerName}

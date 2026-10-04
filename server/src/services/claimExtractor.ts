@@ -1,5 +1,6 @@
 import { config } from '../config';
-import { geminiJson } from './gemini';
+import { claudeJson } from './claude';
+import { geminiBusy, geminiJson } from './gemini';
 
 export const CLAIM_EXTRACTION_PROMPT = `You are a factual-claim extraction engine for a live competitive debate game.
 
@@ -30,6 +31,26 @@ Preserve the relevant original wording as originalText.
 Return structured JSON only.
 
 If there are no objectively fact-checkable claims, return an empty claims array.`;
+
+const CLAUDE_SCHEMA = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    claims: {
+      type: 'array',
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          text: { type: 'string' },
+          originalText: { type: 'string' },
+        },
+        required: ['text', 'originalText'],
+      },
+    },
+  },
+  required: ['claims'],
+};
 
 const SCHEMA = {
   type: 'OBJECT',
@@ -71,25 +92,101 @@ export function parseDraftClaims(raw: unknown): DraftClaim[] {
   return out;
 }
 
+/** TEMP dummy speech for the test button. Delete with claims:demo. */
+export const DUMMY_SPEECH = 'The capital of Australia is Sydney. The United States has 50 states. Australia has more than 100 million people. Every planet in the Solar System has at least one moon.';
+
+function briefError(err: unknown): string {
+  const message = err instanceof Error ? err.message : 'request failed';
+  return message.replace(/request_id":"[^"]+"/g, '').slice(0, 180);
+}
+
+/** TEMP: ask Gemini and Claude separately so the test button can show which one answered. */
+export async function probeClaimExtraction(transcript: string): Promise<{
+  gemini: { ok: boolean; claims: string[]; error: string | null };
+  claude: { ok: boolean; claims: string[]; error: string | null };
+}> {
+  const user = `Finalized speech from one speaker:\n"""${transcript.slice(0, 6000)}"""`;
+  const signal = AbortSignal.timeout(12_000);
+  const [gemini, claude] = await Promise.all([
+    (async () => {
+      const apiKey = config.geminiApiKey || config.geminiFactsKey;
+      if (!apiKey) return { ok: false as const, claims: [] as string[], error: 'GEMINI_API_KEY is not set.' };
+      try {
+        const raw = await geminiJson({ apiKey, system: CLAIM_EXTRACTION_PROMPT, user, schema: SCHEMA, temperature: 0.2 }, signal);
+        return { ok: true as const, claims: parseDraftClaims(raw).map((d) => d.text), error: null };
+      } catch (err) {
+        return { ok: false as const, claims: [] as string[], error: briefError(err) };
+      }
+    })(),
+    (async () => {
+      if (!config.anthropicApiKey) return { ok: false as const, claims: [] as string[], error: 'CLAUDE_API_KEY is not set.' };
+      try {
+        const raw = await claudeJson(CLAIM_EXTRACTION_PROMPT, user, CLAUDE_SCHEMA, signal);
+        return { ok: true as const, claims: parseDraftClaims(raw).map((d) => d.text), error: null };
+      } catch (err) {
+        return { ok: false as const, claims: [] as string[], error: briefError(err) };
+      }
+    })(),
+  ]);
+  return { gemini, claude };
+}
+
 /** Extract challengeable claims. Returns [] when the key is missing. Throws on API failure. */
 let warnedMissingKey = false;
 
 export async function extractClaims(transcript: string, signal?: AbortSignal): Promise<DraftClaim[]> {
   const text = transcript.trim();
   if (!text) return [];
-  if (!config.geminiApiKey) {
+  const user = `Finalized speech from one speaker:\n"""${text.slice(0, 6000)}"""`;
+  const apiKey = config.geminiApiKey || config.geminiFactsKey;
+  if (!apiKey && !config.anthropicApiKey) {
     if (!warnedMissingKey) {
       warnedMissingKey = true;
       console.warn('[claims] GEMINI_API_KEY is not set; claim extraction is off.');
     }
     return [];
   }
-  const raw = await geminiJson({
-    apiKey: config.geminiApiKey,
-    system: CLAIM_EXTRACTION_PROMPT,
-    user: `Finalized speech from one speaker:\n"""${text.slice(0, 6000)}"""`,
-    schema: SCHEMA,
-    temperature: 0.2,
-  }, signal);
-  return parseDraftClaims(raw);
+  const attempts: Promise<{ source: string; drafts: DraftClaim[] }>[] = [];
+  if (apiKey) {
+    attempts.push(geminiJson({
+      apiKey,
+      system: CLAIM_EXTRACTION_PROMPT,
+      user,
+      schema: SCHEMA,
+      temperature: 0.2,
+    }, signal).then((raw) => ({ source: 'gemini', drafts: parseDraftClaims(raw) })));
+  }
+  if (config.anthropicApiKey) {
+    attempts.push(claudeJson(CLAIM_EXTRACTION_PROMPT, user, CLAUDE_SCHEMA, signal).then((raw) => ({ source: 'claude', drafts: parseDraftClaims(raw) })));
+  }
+  return firstClaims(attempts);
+}
+
+/** Use the first model that returns claims. Gemini being down must not delay Claude. */
+function firstClaims(attempts: Promise<{ source: string; drafts: DraftClaim[] }>[]): Promise<DraftClaim[]> {
+  return new Promise((resolve, reject) => {
+    let pending = attempts.length;
+    let sawSuccess = false;
+    let lastErr: unknown;
+    const finish = () => {
+      if (--pending > 0) return;
+      if (sawSuccess) resolve([]);
+      else reject(lastErr instanceof Error ? lastErr : new Error('extraction failed'));
+    };
+    for (const attempt of attempts) {
+      attempt.then((result) => {
+        if (result.drafts.length) {
+          if (result.source === 'claude') console.warn('[claims] using Claude');
+          resolve(result.drafts);
+          return;
+        }
+        sawSuccess = true;
+        finish();
+      }, (err: unknown) => {
+        if (!geminiBusy(err)) lastErr = err;
+        else lastErr ??= err;
+        finish();
+      });
+    }
+  });
 }

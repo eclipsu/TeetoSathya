@@ -96,6 +96,8 @@ export interface GameState {
   factChecks: FactCheckChallenge[];
   /** Id of the check currently holding the clocks, or null. */
   activeFactCheckId: string | null;
+  /** Session that opened the claim picker. The speaker's mic is already off. */
+  factCheckArmedBy: string | null;
 }
 
 export interface Room {
@@ -130,5 +132,6 @@ export function initialGameState(turnSeconds: number): GameState {
     claims: [],
     factChecks: [],
     activeFactCheckId: null,
+    factCheckArmedBy: null,
   };
 }

@@ -46,7 +46,11 @@ export class Transcription {
   private desired = new Map<string, SpeakerTarget | null>();
   private sessions = new Map<string, { target: SpeakerTarget; stt: ElevenLabsSession; retiring: boolean }>();
   private pending = new Map<string, string>();
+  private partials = new Map<string, string>();
+  private partialTimers = new Map<string, NodeJS.Timeout>();
+  private uttered = new Map<string, string>();
   private meta = new Map<string, SpeakerTarget>();
+  private audioLogged = new Set<string>();
   private chains = new Map<string, Promise<void>>();
   private timers = new Map<string, NodeJS.Timeout>();
   private retry = new Map<string, NodeJS.Timeout>();
@@ -84,7 +88,14 @@ export class Transcription {
   acceptAudio(sessionId: string, roomId: string | undefined, payload: unknown): void {
     if (!roomId) return;
     const pcm = asPcm(payload);
-    if (!pcm || pcm.length < 2 || pcm.length > 64_000) return;
+    if (!pcm || pcm.length < 2 || pcm.length > 64_000) {
+      if (!this.audioLogged.has(roomId + ':bad')) {
+        this.audioLogged.add(roomId + ':bad');
+        const kind = payload === null || payload === undefined ? 'empty' : (payload as { constructor?: { name?: string } }).constructor?.name ?? typeof payload;
+        console.warn(`[stt] ${roomId}: microphone packet ignored (${kind})`);
+      }
+      return;
+    }
     const now = Date.now();
     const window = this.audioWindow.get(roomId) ?? { t: now, n: 0 };
     if (now - window.t > 1000) { window.t = now; window.n = 0; }
@@ -93,19 +104,25 @@ export class Transcription {
     if (window.n > 30) return;
     const cur = this.sessions.get(roomId);
     if (!cur || cur.retiring || cur.target.sessionId !== sessionId) return;
+    if (!this.audioLogged.has(roomId)) {
+      this.audioLogged.add(roomId);
+      console.log(`[stt] ${roomId}: microphone audio is reaching transcription`);
+    }
     cur.stt.sendPcm(pcm);
   }
 
   /** Commit in-flight speech and run claim extraction before the claim picker answers. */
   async flushCurrent(room: Room): Promise<void> {
-    const target = targetOf(room);
-    if (!target) return;
     const cur = this.sessions.get(room.id);
-    if (cur && cur.target.sessionId === target.sessionId && cur.target.roundSeq === target.roundSeq) {
-      await cur.stt.commitAndWait(2000);
+    const target = (cur && !cur.retiring ? cur.target : null) ?? targetOf(room) ?? cur?.target ?? null;
+    if (!target) return;
+    if (cur && !cur.retiring && cur.target.sessionId === target.sessionId) {
+      await this.retire(room.id, cur);
+      return;
     }
     const key = targetKey(target);
     this.meta.set(key, target);
+    await this.drain(key);
     await this.drain(key);
   }
 
@@ -117,6 +134,9 @@ export class Transcription {
     const stt = new ElevenLabsSession({
       onPartial: (text) => {
         this.hub.io.to(target.roomId).emit('transcript:interim', { speakerId: target.publicId, text });
+        const key = targetKey(target);
+        this.partials.set(key, text);
+        this.armPartial(key, target);
       },
       onCommitted: (text) => this.onCommitted(target, text),
       onOpen: () => {
@@ -125,6 +145,8 @@ export class Transcription {
       },
       onDown: (message, fatal) => {
         console.warn(`[stt] ${target.roomId}: ${message}`);
+        if (message.startsWith('input_error')) return;
+        this.takePartial(target);
         this.hub.io.to(target.roomId).emit('transcript:status', { available: false });
         if (fatal) {
           this.fatal.add(target.roomId);
@@ -146,13 +168,49 @@ export class Transcription {
     cur.retiring = true;
     if (this.sessions.get(roomId) === cur) this.sessions.delete(roomId);
     const key = targetKey(cur.target);
+    this.takePartial(cur.target);
     try { await cur.stt.commitAndWait(1500); } catch (err) { console.warn('[stt] commit failed:', (err as Error).message); }
     cur.stt.close();
     await this.drain(key);
   }
 
+  /** A partial that has stopped growing is the transcript. VAD only commits after silence, and a dropped socket never commits. */
+  private armPartial(key: string, target: SpeakerTarget): void {
+    const existing = this.partialTimers.get(key);
+    if (existing) clearTimeout(existing);
+    this.partialTimers.set(key, setTimeout(() => {
+      this.partialTimers.delete(key);
+      this.takePartial(target);
+    }, 1200));
+  }
+
+  private takePartial(target: SpeakerTarget): void {
+    const key = targetKey(target);
+    const timer = this.partialTimers.get(key);
+    if (timer) clearTimeout(timer);
+    this.partialTimers.delete(key);
+    const text = (this.partials.get(key) ?? '').trim();
+    this.partials.delete(key);
+    if (text) this.onCommitted(target, text);
+  }
+
   private onCommitted(target: SpeakerTarget, text: string): void {
     const key = targetKey(target);
+    const timer = this.partialTimers.get(key);
+    if (timer) clearTimeout(timer);
+    this.partialTimers.delete(key);
+    this.partials.delete(key);
+    const prev = this.uttered.get(key) ?? '';
+    let addition = text.trim();
+    if (!addition) return;
+    if (prev && (addition === prev || prev.endsWith(addition))) return;
+    if (prev && addition.startsWith(prev)) addition = addition.slice(prev.length).trim();
+    if (!addition) {
+      this.uttered.set(key, text.trim());
+      return;
+    }
+    this.uttered.set(key, prev ? `${prev} ${addition}`.trim().slice(-4000) : addition);
+    text = addition;
     this.meta.set(key, target);
     void this.hub.store.update(target.roomId, (room) => {
       appendTranscript(room, {
@@ -204,7 +262,7 @@ export class Transcription {
     if (!meta) return;
     let drafts;
     try {
-      drafts = await extractClaims(text, AbortSignal.timeout(10_000));
+      drafts = await extractClaims(text, AbortSignal.timeout(22_000));
     } catch (err) {
       console.warn('[claims] extraction failed:', (err as Error).message);
       const newer = this.pending.get(key) ?? '';

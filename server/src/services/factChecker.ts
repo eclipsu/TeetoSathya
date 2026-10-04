@@ -45,16 +45,6 @@ Do not fabricate citations, URLs, quotations, or evidence.
 
 Return structured JSON only.`;
 
-const SCHEMA = {
-  type: 'OBJECT',
-  properties: {
-    verdict: { type: 'STRING', enum: ['SUPPORTED', 'CONTRADICTED', 'INCONCLUSIVE'] },
-    confidence: { type: 'NUMBER' },
-    explanation: { type: 'STRING' },
-  },
-  required: ['verdict', 'confidence', 'explanation'],
-};
-
 export interface CheckedClaim {
   claim: string;
   verdict: FactVerdict;
@@ -92,12 +82,21 @@ export function parseCheckedClaim(claim: string, raw: unknown): CheckedClaim | n
 
 /** Judge one claim. Throws if the key is missing or the API fails — the caller maps that to "unavailable". */
 export async function checkClaim(claim: string, signal?: AbortSignal): Promise<CheckedClaim> {
-  if (!config.geminiFactsKey) throw new Error('GEMINI_FACTS_KEY is not set.');
+  const apiKey = config.geminiFactsKey || config.geminiApiKey;
+  if (!apiKey) throw new Error('GEMINI_API_KEY is not set.');
   const raw = await geminiJson({
-    apiKey: config.geminiFactsKey,
+    apiKey,
     system: FACT_CHECK_PROMPT,
     user: JSON.stringify({ claim }),
-    schema: SCHEMA,
+    schema: {
+      type: 'OBJECT',
+      properties: {
+        verdict: { type: 'STRING', enum: ['SUPPORTED', 'CONTRADICTED', 'INCONCLUSIVE'] },
+        confidence: { type: 'NUMBER' },
+        explanation: { type: 'STRING' },
+      },
+      required: ['verdict', 'confidence', 'explanation'],
+    },
     temperature: 0.1,
   }, signal);
   const parsed = parseCheckedClaim(claim, raw);

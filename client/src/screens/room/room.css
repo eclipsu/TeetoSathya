@@ -43,7 +43,7 @@
 /* Main: TEAM A | STAGE | TEAM B */
 .room__main {
   display: grid;
-  grid-template-columns: minmax(220px, 290px) minmax(0, 1fr) minmax(220px, 290px);
+  grid-template-columns: minmax(200px, 240px) minmax(180px, 240px) minmax(0, 1fr) minmax(180px, 240px);
   gap: 16px;
   min-height: 0;
 }
@@ -167,15 +167,16 @@ button.seat__open:hover .seat__take, button.seat__open:focus-visible .seat__take
 .chip--suggest { display: inline-flex; align-items: center; gap: 6px; padding: 4px 12px 4px 4px; font-weight: 600; }
 
 /* Narrow screens: stack the columns */
-@media (max-width: 1100px) {
-  .room__main { grid-template-columns: minmax(200px, 240px) minmax(0, 1fr) minmax(200px, 240px); }
+@media (max-width: 1200px) {
+  .room__main { grid-template-columns: minmax(180px, 210px) minmax(160px, 200px) minmax(0, 1fr) minmax(160px, 200px); }
 }
 @media (max-width: 900px) {
   .room { padding: 0 12px 12px; }
   .room__header { grid-template-columns: 1fr auto; }
   .room__title { grid-column: 1 / -1; grid-row: 2; }
   .room__main { grid-template-columns: 1fr 1fr; }
-  .stage { grid-column: 1 / -1; grid-row: 1; }
+  .fact-chat { grid-column: 1 / -1; grid-row: 1; max-height: 240px; }
+  .stage { grid-column: 1 / -1; grid-row: 2; }
   .team { min-height: 0; }
 }
 @media (max-width: 560px) {

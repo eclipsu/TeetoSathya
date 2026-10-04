@@ -1,7 +1,6 @@
 import type { RoomSnapshot } from '@teeto/shared';
 import { Timer } from '../../components/Timer';
 import { roundRemaining, useServerNow } from '../../state/clock';
-import { FactCheckHistory } from './FactCheck';
 import { HotSeatCard } from './HotSeatCard';
 
 interface Props {
@@ -39,7 +38,6 @@ export function Stage({ snapshot: s, myId, isHost, onDone, interimText, transcri
         <div className="stage__vs" aria-hidden="true">VS</div>
         <HotSeatCard side={1} snapshot={s} now={now} myId={myId} onDone={onDone} />
       </div>
-      <FactCheckHistory items={s.game.factChecks} />
     </section>
   );
 }

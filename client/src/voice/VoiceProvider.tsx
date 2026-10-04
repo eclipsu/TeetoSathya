@@ -57,12 +57,14 @@ function livekitUrl() {
 
 interface Props {
   roomId: string;
+  /** Cut the local mic immediately, before LiveKit's permission update arrives. */
+  holdMic?: boolean;
   /** Called after LiveKit connects so the server re-applies mic permission. */
   onConnected: () => void;
   children: ReactNode;
 }
 
-export function VoiceProvider({ roomId, onConnected, children }: Props) {
+export function VoiceProvider({ roomId, holdMic = false, onConnected, children }: Props) {
   const roomRef = useRef<Room | null>(null);
   const metersRef = useRef<TrackMeters | null>(null);
   const audioHost = useRef<HTMLDivElement | null>(null);
@@ -202,7 +204,7 @@ export function VoiceProvider({ roomId, onConnected, children }: Props) {
   useEffect(() => {
     const room = roomRef.current;
     if (!room || status !== 'connected') return;
-    const shouldBeLive = canPublish && wantMic;
+    const shouldBeLive = canPublish && wantMic && !holdMic;
     const isOn = room.localParticipant.isMicrophoneEnabled;
     if (shouldBeLive === isOn) return;
     room.localParticipant
@@ -216,7 +218,7 @@ export function VoiceProvider({ roomId, onConnected, children }: Props) {
         setWantMic(false);
         refreshMicState(room);
       });
-  }, [canPublish, wantMic, status, refreshMicState]);
+  }, [canPublish, wantMic, holdMic, status, refreshMicState]);
 
   useEffect(() => () => leave(), [leave]);
 

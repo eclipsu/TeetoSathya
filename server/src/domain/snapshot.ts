@@ -49,6 +49,15 @@ export function toSnapshot(room: Room, now: number): RoomSnapshot {
       const active = g.activeFactCheckId ? g.factChecks.find((f) => f.id === g.activeFactCheckId) : undefined;
       return active ? toFactCheckView(active) : null;
     })(),
+    factCheckArmed: (() => {
+      if (!g.factCheckArmedBy) return null;
+      const challenger = room.participants.get(g.factCheckArmedBy);
+      const side = g.activeSide;
+      const speakerId = side === null ? null : g.hotSeat[side];
+      const speaker = speakerId ? room.participants.get(speakerId) : undefined;
+      if (!challenger || !speaker) return null;
+      return { challengerName: challenger.username, speakerName: speaker.username };
+    })(),
     factChecks: g.factChecks.map(toFactCheckView),
     factCheckUsedIds: [...g.factCheckUsed].map((sid) => idOf(sid)).filter((id): id is string => !!id),
   };

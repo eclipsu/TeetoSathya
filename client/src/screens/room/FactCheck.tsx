@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { factCheckBlockReason, factCheckContextFromSnapshot, JURY_SEATS, type ClaimOption, type FactCheckView, type JuryBinary, type JuryModel, type JuryPhase, type JuryResult, type JuryVote, type RoomSnapshot } from '@teeto/shared';
+import { useEffect, useRef, useState } from 'react';
+import { factCheckBlockReason, factCheckContextFromSnapshot, JURY_SEATS, type ClaimOption, type FactCheckView, type JuryModel, type RoomSnapshot } from '@teeto/shared';
 import { Modal } from '../../components/Modal';
 import './factcheck.css';
 
@@ -73,165 +73,74 @@ export function FactCheckPicker({
   );
 }
 
-const MODEL_NAME: Record<JuryModel, string> = { gemini: 'Gemini', claude: 'Claude', chatgpt: 'ChatGPT' };
-const MODEL_ROLE: Record<JuryModel, string> = { gemini: 'Evidence Analyst', claude: 'Skeptic', chatgpt: 'Referee Analyst' };
-const MODEL_WORKING: Record<JuryModel, string> = {
-  gemini: 'Analyzing evidence...',
-  claude: 'Stress-testing claim...',
-  chatgpt: 'Checking logic...',
+const MODEL_NAME: Record<JuryModel, string> = {
+  gemini: 'Gemini',
+  gemini_skeptic: 'Gemini 2',
+  groq: 'Groq',
+  claude: 'Claude',
+  chatgpt: 'ChatGPT',
 };
-const MODEL_ORDER: JuryModel[] = ['gemini', 'claude', 'chatgpt'];
 
 function pct(n: number): string {
   return `${Math.round(n * 100)}%`;
 }
 
-function voteKind(verdict: JuryBinary): string {
-  return verdict === 'INCORRECT' ? 'contradicted' : 'supported';
+function finalLine(f: FactCheckView): { text: string; kind: string } {
+  if (f.status === 'checking') return { text: f.juryPhase === 'deliberating' ? 'Deliberating…' : 'Checking…', kind: 'wait' };
+  if (f.unavailable) return { text: 'Final: No decision', kind: 'mid' };
+  const confidence = f.jury?.verdict ? ` · ${pct(f.jury.juryConfidence)}` : '';
+  if (f.verdict === 'INCORRECT' || f.verdict === 'CONTRADICTED') return { text: `Final: Incorrect${confidence}`, kind: 'bad' };
+  if (f.verdict === 'CORRECT' || f.verdict === 'SUPPORTED') return { text: `Final: Correct${confidence}`, kind: 'ok' };
+  if (f.jury && !f.jury.verdict) return { text: 'Final: Split', kind: 'mid' };
+  return { text: 'Final: No decision', kind: 'mid' };
 }
 
-function voteTitle(verdict: JuryBinary): string {
-  return verdict === 'INCORRECT' ? '🔴 INCORRECT' : '🟢 CORRECT';
-}
-
-function orderedVotes(votes: JuryVote[]): JuryVote[] {
-  return [...votes].sort((a, b) => MODEL_ORDER.indexOf(a.model) - MODEL_ORDER.indexOf(b.model));
-}
-
-function JuryWorking({ phase }: { phase: JuryPhase | null }) {
-  if (phase === 'deliberating') return <p className="jury-phase">JURY DELIBERATING...</p>;
+function FactMessage({ item }: { item: FactCheckView }) {
+  const final = finalLine(item);
+  const votes = item.jury?.votes ?? [];
   return (
-    <ul className="jury-working">
-      {JURY_SEATS.map((model) => (
-        <li key={model}><strong>{MODEL_NAME[model]}</strong> {MODEL_WORKING[model]}</li>
-      ))}
-    </ul>
-  );
-}
-
-function JuryDetails({ jury }: { jury: JuryResult }) {
-  return (
-    <details className="jury-details">
-      <summary>View Jury Details</summary>
-      {orderedVotes(jury.votes).map((vote) => (
-        <div key={vote.model} className="jury-details__card">
-          <p><strong>{MODEL_NAME[vote.model]}</strong> · {vote.role}</p>
-          <p>Initial: {vote.initialVerdict} {pct(vote.initialConfidence)}{vote.changedVote ? ' · changed vote' : ' · held vote'}</p>
-          <p>Final: {vote.finalVerdict} {pct(vote.finalConfidence)}</p>
-          <p>{vote.responseToOthers}</p>
-          <p>{vote.reasoning}</p>
-          {vote.limitations.length > 0 && (
-            <ul>
-              {vote.limitations.map((note) => <li key={note}>{note}</li>)}
-            </ul>
-          )}
-        </div>
-      ))}
-    </details>
-  );
-}
-
-function JuryResultView({ jury }: { jury: JuryResult }) {
-  const winning = Math.max(jury.votesForCorrect, jury.votesForIncorrect);
-  const losing = Math.min(jury.votesForCorrect, jury.votesForIncorrect);
-  const footer = jury.verdict === 'INCORRECT' ? 'CHALLENGE SUCCESSFUL' : jury.verdict === 'CORRECT' ? 'CHALLENGE FAILED' : 'NO DECISION';
-  return (
-    <>
-      <ul className="jury-votes">
-        {orderedVotes(jury.votes).map((vote) => (
+    <article className="fact-msg">
+      <p className="fact-msg__who">{item.challengerName} challenged {item.speakerName}</p>
+      <p className="fact-msg__claim">“{item.claim}”</p>
+      <ul className="fact-msg__scores">
+        {(votes.length ? votes : JURY_SEATS.map((model) => ({ model, finalConfidence: null as number | null }))).map((vote) => (
           <li key={vote.model}>
-            <div className="jury-votes__who">
-              <strong>{MODEL_NAME[vote.model].toUpperCase()}</strong>
-              <span>{MODEL_ROLE[vote.model]}</span>
-            </div>
-            <p className={`factcheck-banner__verdict factcheck-banner__verdict--${voteKind(vote.finalVerdict)}`}>{voteTitle(vote.finalVerdict)}</p>
-            <p>Confidence: {pct(vote.finalConfidence)}</p>
-            <p className="factcheck-banner__explain">“{vote.reasoning}”</p>
+            <span>{MODEL_NAME[vote.model]}</span>
+            <span>{vote.finalConfidence == null ? '…' : pct(vote.finalConfidence)}</span>
           </li>
         ))}
       </ul>
-      <div className="jury-final">
-        <div className="factcheck-banner__kicker">FINAL JURY VERDICT</div>
-        <p className="jury-tally">{winning} — {losing}</p>
-        {jury.verdict ? (
-          <p className={`factcheck-banner__verdict factcheck-banner__verdict--${voteKind(jury.verdict)}`}>{voteTitle(jury.verdict)}</p>
-        ) : (
-          <p className="factcheck-banner__verdict factcheck-banner__verdict--inconclusive">SPLIT — NO DECISION</p>
+      <p className={`fact-msg__final fact-msg__final--${final.kind}`}>{final.text}</p>
+    </article>
+  );
+}
+
+/** Left-bar chat of fact checks. Confidences and the final answer only. */
+export function FactChat({
+  items,
+  armed,
+}: {
+  items: FactCheckView[];
+  armed?: { challengerName: string; speakerName: string } | null;
+}) {
+  const log = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = log.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [items, armed]);
+  return (
+    <aside className="fact-chat" aria-label="Fact check chat">
+      <header className="fact-chat__head">Fact checks</header>
+      <div className="fact-chat__log" ref={log}>
+        {items.length === 0 && !armed && <p className="fact-chat__empty">Claims show up here.</p>}
+        {items.map((item) => <FactMessage key={item.id} item={item} />)}
+        {armed && !items.some((item) => item.status === 'checking') && (
+          <article className="fact-msg fact-msg--hold">
+            <p className="fact-msg__who">{armed.challengerName} called a fact check</p>
+            <p className="fact-msg__final fact-msg__final--wait">{armed.speakerName}, your microphone is off.</p>
+          </article>
         )}
-        <ul className="jury-split">
-          {orderedVotes(jury.votes).map((vote) => (
-            <li key={vote.model}>
-              {MODEL_NAME[vote.model]} {vote.finalVerdict === 'CORRECT' ? '✓ CORRECT' : '✗ INCORRECT'} {pct(vote.finalConfidence)}
-            </li>
-          ))}
-        </ul>
-        {jury.verdict && <p>Jury Confidence: {pct(jury.juryConfidence)}</p>}
-        <div className="factcheck-banner__footer">{footer}</div>
       </div>
-      <JuryDetails jury={jury} />
-    </>
-  );
-}
-
-function resolvedWithoutJury(f: FactCheckView): { title: string; footer: string; kind: string } {
-  if (f.unavailable && f.explanation === 'JURY ERROR') return { title: 'JURY ERROR', footer: 'NO DECISION', kind: 'unavailable' };
-  if (f.unavailable) return { title: 'FACT CHECK UNAVAILABLE', footer: 'NO DECISION', kind: 'unavailable' };
-  if (f.verdict === 'INCORRECT' || f.verdict === 'CONTRADICTED') return { title: '🔴 INCORRECT', footer: 'CHALLENGE SUCCESSFUL', kind: 'contradicted' };
-  if (f.verdict === 'CORRECT' || f.verdict === 'SUPPORTED') return { title: '🟢 CORRECT', footer: 'CHALLENGE FAILED', kind: 'supported' };
-  return { title: '⚪ INCONCLUSIVE', footer: 'NO DECISION', kind: 'inconclusive' };
-}
-
-/** Visible to the whole room while a fact-check holds the floor. */
-export function FactCheckBanner({ factCheck }: { factCheck: FactCheckView | null }) {
-  if (!factCheck) return null;
-  const fallback = factCheck.status === 'resolved' && !factCheck.jury ? resolvedWithoutJury(factCheck) : null;
-  return (
-    <div className="factcheck-banner" role="status" aria-live="polite">
-      <div className="factcheck-banner__kicker">🚨 AI JURY</div>
-      <p className="factcheck-banner__claim">
-        <strong>{factCheck.challengerName}</strong> challenged {factCheck.speakerName}: “{factCheck.claim}”
-      </p>
-      {factCheck.status === 'checking' && <JuryWorking phase={factCheck.juryPhase} />}
-      {factCheck.jury && <JuryResultView jury={factCheck.jury} />}
-      {fallback && (
-        <>
-          <p className={`factcheck-banner__verdict factcheck-banner__verdict--${fallback.kind}`}>{fallback.title}</p>
-          <div className="factcheck-banner__footer">{fallback.footer}</div>
-        </>
-      )}
-    </div>
-  );
-}
-
-function historyLine(f: FactCheckView): { mark: string; kind: string; text: string } {
-  if (f.unavailable) return { mark: '○', kind: 'mid', text: `${f.challengerName} challenged ${f.speakerName} — Fact check unavailable` };
-  if (f.outcome === 'successful') return { mark: '✓', kind: 'ok', text: `${f.challengerName} successfully challenged ${f.speakerName}` };
-  if (f.outcome === 'failed') return { mark: '✗', kind: 'bad', text: `${f.challengerName} unsuccessfully challenged ${f.speakerName}` };
-  return { mark: '○', kind: 'mid', text: `${f.challengerName} challenged ${f.speakerName} — Inconclusive` };
-}
-
-export function FactCheckHistory({ items }: { items: FactCheckView[] }) {
-  const done = items.filter((f) => f.status === 'resolved');
-  if (!done.length) return null;
-  return (
-    <section className="factcheck-history" aria-label="Fact checks">
-      <h3>FACT CHECKS</h3>
-      <ul>
-        {done.map((f) => {
-          const line = historyLine(f);
-          return (
-            <li key={f.id}>
-              <span className={`mark mark--${line.kind}`} aria-hidden="true">{line.mark}</span>
-              <div>
-                <p>{line.text}</p>
-                <p className="factcheck-quote">“{f.claim}”</p>
-                {f.jury && <p className="factcheck-quote">{Math.max(f.jury.votesForCorrect, f.jury.votesForIncorrect)} — {Math.min(f.jury.votesForCorrect, f.jury.votesForIncorrect)} {f.jury.verdict ?? 'SPLIT'}</p>}
-                {f.jury && <JuryDetails jury={f.jury} />}
-              </div>
-            </li>
-          );
-        })}
-      </ul>
-    </section>
+    </aside>
   );
 }

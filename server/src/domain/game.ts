@@ -120,6 +120,7 @@ export function startRound(room: Room, now: number): GameResult {
   g.claims = [];
   g.factChecks = [];
   g.activeFactCheckId = null;
+  g.factCheckArmedBy = null;
   g.activeSide = null;
   g.clockRunningSince = null;
   for (const side of [0, 1] as const) {
@@ -218,6 +219,7 @@ export function pause(room: Room, now: number): GameResult {
 
 export function resume(room: Room, now: number): GameResult {
   if (room.status !== 'live') return fail('The round is not live.');
+  if (room.game.factCheckArmedBy) return fail('A fact check is being chosen.');
   if (room.game.activeFactCheckId) return fail('Dismiss the fact check to resume.');
   if (room.game.buzz) return fail('Dismiss the buzz to resume.');
   if (!room.game.paused) return ok();
@@ -240,6 +242,7 @@ export function endRound(room: Room, now: number): GameResult {
     active.juryPhase = null;
   }
   g.activeFactCheckId = null;
+  g.factCheckArmedBy = null;
   room.status = 'ended';
   g.roundRemainingMs = g.roundEndsAt !== null ? Math.max(0, g.roundEndsAt - now) : g.roundRemainingMs;
   g.roundEndsAt = null;

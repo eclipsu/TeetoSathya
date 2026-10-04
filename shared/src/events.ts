@@ -74,6 +74,10 @@ export interface ClientToServerEvents {
   'transcript:audio': (chunk: Uint8Array) => void;
   /** Latest claims of the current opposing speaker. Does not consume the fact-check. */
   'factcheck:options': (ack: Ack<{ claims: ClaimOption[]; speakerId: string | null; speakerName: string | null }>) => void;
+  /** Close the claim picker without challenging. Turns the speaker's mic back on. */
+  'factcheck:cancel': (ack: Ack) => void;
+  /** TEMP: run claim extraction on a fixed sentence. Delete with the test button. */
+  'claims:demo': (ack: Ack<{ gemini: string; claude: string; claims: string[] }>) => void;
   'factcheck:submit': (p: { claimId: string }, ack: Ack) => void;
   'factcheck:dismiss': (p: HostPayload, ack: Ack) => void;
 }

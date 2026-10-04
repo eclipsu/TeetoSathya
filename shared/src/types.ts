@@ -72,12 +72,16 @@ export type FactVerdict = 'SUPPORTED' | 'CONTRADICTED' | 'INCONCLUSIVE' | 'CORRE
  */
 export type FactCheckOutcome = 'successful' | 'failed' | 'no_decision';
 
-export type JuryModel = 'gemini' | 'claude' | 'chatgpt';
+export type JuryModel = 'gemini' | 'gemini_skeptic' | 'groq' | 'claude' | 'chatgpt';
 export type JuryBinary = 'CORRECT' | 'INCORRECT';
 export type JuryPhase = 'independent' | 'deliberating';
 
-/** Seated jurors. Claude is off until `'claude'` is added back here. */
-export const JURY_SEATS: readonly JuryModel[] = ['gemini', 'chatgpt'];
+/**
+ * Gemini evidence uses GEMINI_API_KEY or GEMINI_FACTS_KEY.
+ * Claude skeptic uses CLAUDE_API_KEY.
+ * Groq is not seated.
+ */
+export const JURY_SEATS: readonly JuryModel[] = ['gemini', 'claude'];
 
 /** One juror's independent vote and their vote after seeing the other two. */
 export interface JuryVote {
@@ -149,6 +153,8 @@ export interface GameView {
   buzz: BuzzView | null;
   /** The fact-check currently holding the floor, if any. Cleared when the host resumes. */
   factCheck: FactCheckView | null;
+  /** Set the moment someone clicks Fact Check, before a claim is chosen. */
+  factCheckArmed: { challengerName: string; speakerName: string } | null;
   /** Resolved and in-progress checks for this round, oldest first. */
   factChecks: FactCheckView[];
   /** Public participant ids that have submitted their one fact-check this round. */

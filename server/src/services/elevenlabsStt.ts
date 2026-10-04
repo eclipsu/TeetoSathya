@@ -15,6 +15,9 @@ export interface SttHandlers {
 export class ElevenLabsSession {
   private ws: WebSocket | null = null;
   private sentAudio = false;
+  private ready = false;
+  private chunksSent = 0;
+  private queued: Buffer[] = [];
   private commitWait: (() => void) | null = null;
   private closed = false;
 
@@ -39,17 +42,31 @@ export class ElevenLabsSession {
     this.ws = ws;
     ws.on('open', () => this.handlers.onOpen());
     ws.on('message', (data) => this.onMessage(data.toString()));
-    ws.on('error', (err) => this.handlers.onDown(err.message, false));
-    ws.on('close', () => {
-      if (!this.closed) this.handlers.onDown('ElevenLabs connection closed.', false);
+    ws.on('error', (err) => {
+      if (!this.closed) this.handlers.onDown(err.message, false);
+    });
+    ws.on('close', (code, reason) => {
+      const why = reason.length ? ` ${reason.toString().slice(0, 120)}` : '';
+      if (!this.closed) this.handlers.onDown(`ElevenLabs connection closed (${code}${why}, audio=${this.chunksSent}).`, false);
       this.commitWait?.();
       this.commitWait = null;
     });
   }
 
   sendPcm(pcm: Buffer): void {
+    if (this.closed) return;
+    if (!this.ready || !this.open) {
+      this.queued.push(pcm);
+      if (this.queued.length > 20) this.queued.shift();
+      return;
+    }
+    this.writePcm(pcm);
+  }
+
+  private writePcm(pcm: Buffer): void {
     if (!this.open) return;
     this.sentAudio = true;
+    this.chunksSent += 1;
     this.ws!.send(JSON.stringify({
       message_type: 'input_audio_chunk',
       audio_base_64: pcm.toString('base64'),
@@ -58,7 +75,10 @@ export class ElevenLabsSession {
     }));
   }
 
-  /** Ask ElevenLabs to finalize whatever is still buffered. Resolves on the next commit or after `ms`. */
+  /**
+   * Wait for VAD to commit buffered speech. This session uses commit_strategy=vad,
+   * which rejects a manual commit message.
+   */
   commitAndWait(ms: number): Promise<void> {
     if (!this.open || !this.sentAudio) return Promise.resolve();
     return new Promise((resolve) => {
@@ -71,13 +91,6 @@ export class ElevenLabsSession {
         this.commitWait = null;
         resolve();
       };
-      try {
-        this.ws!.send(JSON.stringify({ message_type: 'commit' }));
-      } catch {
-        clearTimeout(timer);
-        this.commitWait = null;
-        resolve();
-      }
     });
   }
 
@@ -90,23 +103,36 @@ export class ElevenLabsSession {
   }
 
   private onMessage(raw: string): void {
-    let msg: { message_type?: string; text?: string };
-    try { msg = JSON.parse(raw) as { message_type?: string; text?: string }; } catch { return; }
+    let msg: { message_type?: string; text?: string; transcript?: string; error?: unknown };
+    try { msg = JSON.parse(raw) as { message_type?: string; text?: string; transcript?: string; error?: unknown }; } catch { return; }
     const type = msg.message_type ?? '';
+    const text = String(msg.text ?? msg.transcript ?? '').trim();
     if (type === 'partial_transcript') {
-      if (msg.text) this.handlers.onPartial(msg.text);
+      if (text) this.handlers.onPartial(text);
       return;
     }
     if (type === 'committed_transcript' || type === 'committed_transcript_with_timestamps') {
-      const text = (msg.text ?? '').trim();
       if (text) this.handlers.onCommitted(text);
       this.commitWait?.();
       return;
     }
-    if (type === 'session_started') return;
-    if (type.endsWith('_error') || type === 'error') {
-      const fatal = type === 'auth_error' || type === 'quota_exceeded';
-      this.handlers.onDown(type, fatal);
+    if (type === 'session_started') {
+      this.ready = true;
+      const queued = this.queued;
+      this.queued = [];
+      for (const pcm of queued) this.writePcm(pcm);
+      return;
+    }
+    if (!type || type === 'error' || type.endsWith('_error') || type.endsWith('_exceeded') || type === 'rate_limited' || type === 'invalid_request' || type === 'insufficient_audio_activity' || type === 'unaccepted_terms') {
+      const detail = errorText(msg.error);
+      const fatal = type === 'auth_error' || type === 'quota_exceeded' || type === 'unaccepted_terms';
+      this.handlers.onDown(detail ? `${type}: ${detail}` : type || 'unknown', fatal);
     }
   }
+}
+
+function errorText(error: unknown): string {
+  if (typeof error === 'string') return error.trim().slice(0, 180);
+  if (error && typeof error === 'object' && 'message' in error && typeof error.message === 'string') return error.message.trim().slice(0, 180);
+  return '';
 }

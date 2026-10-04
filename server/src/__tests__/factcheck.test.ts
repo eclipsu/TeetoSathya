@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import * as game from '../domain/game';
 import { setRole } from '../domain/seats';
+import { canPublish } from '../domain/micPolicy';
 import {
+  armFactCheck,
   canFactCheck,
   coerceVerdict,
+  disarmFactCheck,
   dismissFactCheck,
   getRecentClaims,
   mergeClaims,
@@ -37,6 +40,17 @@ function addClaim(room: Room, speakerSessionId: string, team: TeamIndex, id: str
 }
 
 describe('fact-check eligibility', () => {
+  it('clicking fact check cuts the speaker mic until the picker is cancelled', () => {
+    const room = liveRoom();
+    const speaker = room.participants.get(room.hostSessionId)!;
+    expect(canPublish(room, speaker)).toBe(true);
+    expect(armFactCheck(room, 'sess-b1-00001', T0 + 500).ok).toBe(true);
+    expect(canPublish(room, speaker)).toBe(false);
+    disarmFactCheck(room, 'sess-b1-00001', T0 + 800);
+    expect(room.game.paused).toBe(false);
+    expect(canPublish(room, speaker)).toBe(true);
+  });
+
   it('the active speaker cannot fact check', () => {
     const room = liveRoom();
     const res = canFactCheck(room, room.hostSessionId);

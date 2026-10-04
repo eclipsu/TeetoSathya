@@ -1,7 +1,10 @@
 import { JURY_SEATS, type JuryModel, type JuryResult, type JuryVote } from '@teeto/shared';
 import { claudeDeliberate, claudeIndependent } from './claudeJuror';
 import { geminiDeliberate, geminiIndependent } from './geminiJuror';
+import { geminiSkepticDeliberate, geminiSkepticIndependent } from './geminiSkepticJuror';
+import { groqDeliberate, groqIndependent } from './groqJuror';
 import { chatgptDeliberate, chatgptIndependent } from './openaiJuror';
+import { geminiBusy } from '../gemini';
 import { JuryFailure, type Round1Analysis } from './types';
 
 const ATTEMPT_MS = 18_000;
@@ -95,11 +98,29 @@ export interface JuryProgress {
   phase: 'independent' | 'deliberating';
 }
 
+/** One seated juror has nobody to deliberate with, so the independent vote is the final vote. */
+function round1ToVote(analysis: Round1Analysis): JuryVote {
+  return {
+    model: analysis.model,
+    role: analysis.role,
+    initialVerdict: analysis.verdict,
+    initialConfidence: analysis.confidence,
+    finalVerdict: analysis.verdict,
+    finalConfidence: analysis.confidence,
+    changedVote: false,
+    reasoning: analysis.reasoning,
+    limitations: analysis.limitations,
+    responseToOthers: 'No other juror is seated.',
+  };
+}
+
 const SEATS: Record<JuryModel, {
   independent: (claim: string, signal: AbortSignal) => Promise<Round1Analysis>;
   deliberate: (packet: string, own: Round1Analysis, signal: AbortSignal) => Promise<JuryVote>;
 }> = {
   gemini: { independent: geminiIndependent, deliberate: geminiDeliberate },
+  gemini_skeptic: { independent: geminiSkepticIndependent, deliberate: geminiSkepticDeliberate },
+  groq: { independent: groqIndependent, deliberate: groqDeliberate },
   claude: { independent: claudeIndependent, deliberate: claudeDeliberate },
   chatgpt: { independent: chatgptIndependent, deliberate: chatgptDeliberate },
 };
@@ -110,15 +131,31 @@ const SEATS: Record<JuryModel, {
  */
 export async function runJury(claimId: string, claim: string, onPhase?: (phase: JuryProgress['phase']) => Promise<void> | void): Promise<JuryResult> {
   await onPhase?.('independent');
-  const round1 = await Promise.all(JURY_SEATS.map((model) => attempt(model, (signal) => SEATS[model].independent(claim, signal))));
-
-  await onPhase?.('deliberating');
-  const votes = await Promise.all(round1.map((own) => {
-    const packet = deliberationUser(claim, own, peerAnalyses(own, round1));
-    return attempt(`${own.model} deliberation`, (signal) => SEATS[own.model].deliberate(packet, own, signal));
+  const settled = await Promise.all(JURY_SEATS.map(async (model) => {
+    try {
+      return await attempt(model, (signal) => SEATS[model].independent(claim, signal));
+    } catch (err) {
+      if ((model === 'gemini' || model === 'gemini_skeptic') && geminiBusy(err)) {
+        console.warn('[jury] Gemini is unavailable, its vote is left out');
+        return null;
+      }
+      throw err;
+    }
   }));
+  const round1 = settled.filter((analysis): analysis is Round1Analysis => analysis !== null);
+  if (!round1.length) throw new Error('No juror returned a vote.');
 
-  const tally = calculateMajority(votes, JURY_SEATS.length);
+  const votes = round1.length < 2
+    ? round1.map(round1ToVote)
+    : await (async () => {
+      await onPhase?.('deliberating');
+      return Promise.all(round1.map((own) => {
+        const packet = deliberationUser(claim, own, peerAnalyses(own, round1));
+        return attempt(`${own.model} deliberation`, (signal) => SEATS[own.model].deliberate(packet, own, signal));
+      }));
+    })();
+
+  const tally = calculateMajority(votes, votes.length);
   return {
     claimId,
     claim,
