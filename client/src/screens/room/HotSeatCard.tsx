@@ -56,7 +56,7 @@ export function HotSeatCard({ side, snapshot: s, now, myId, onDone, compact = fa
         {p ? (
           <>
             <div className="hot__avatar">
-              <Avatar name={p.username} size={compact ? 56 : 88} speaking={speaking} />
+              <Avatar name={p.username} size={compact ? 44 : 56} speaking={speaking} variant="animal" />
             </div>
             {holdsFloor && <span className="hot__live">Live</span>}
             {state && <span className="hot__state">{state}</span>}
@@ -79,7 +79,7 @@ export function HotSeatCard({ side, snapshot: s, now, myId, onDone, compact = fa
           </>
         ) : (
           <div className="hot__empty">
-            <span className="hot__empty-ring" />
+            <Avatar name={side === 0 ? 'Fox' : 'Panda'} size={56} variant="animal" />
             <p className="muted">No speaker yet</p>
             <span className="hot__side"><span className="dot" />{s.sides[side]}</span>
           </div>

@@ -1,11 +1,12 @@
 /* Center stage: big round clock, then two hot seats with their clock pills above.
    A buzz or fact check slides a card up into the middle and pushes both seats aside. */
-.stage { display: flex; flex-direction: column; gap: var(--s5); min-width: 0; min-height: 0; }
+.stage { display: flex; flex-direction: column; gap: var(--s3); min-width: 0; min-height: min-content; }
+.stage > * { flex-shrink: 0; }
 .stage__round { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--s2); padding: var(--s2) 0 0; }
 .stage .timer--lg .timer__digits { transition: font-size 450ms cubic-bezier(0.2, 0.8, 0.2, 1); }
 .stage--challenge .timer--lg .timer__digits { font-size: clamp(2rem, 2.8vw, 3.25rem); }
 .stage--challenge { gap: var(--s4); }
-.stage__lobby { display: flex; flex-direction: column; align-items: center; gap: var(--s4); }
+.stage__lobby { display: flex; flex-direction: column; align-items: center; gap: var(--s2); }
 .stage__hint { margin: 0; text-align: center; font-size: 0.8125rem; color: var(--text-dim); }
 .stage__start { min-width: 96px; }
 
@@ -14,7 +15,7 @@
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 0fr) minmax(0, 1fr);
   align-items: start;
-  min-height: 0;
+  min-height: min-content;
   transition: grid-template-columns var(--slide) cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 .stage__seats.is-challenge { grid-template-columns: minmax(0, 0.62fr) minmax(0, 2fr) minmax(0, 0.62fr); }
@@ -36,13 +37,14 @@
 .hot__card {
   align-self: stretch;
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: var(--s1);
-  min-height: clamp(220px, 30vh, 360px);
-  padding: var(--s5) var(--s4);
+  height: 220px;
+  min-height: 0;
+  padding: var(--s3);
   text-align: center;
   transition: border-color var(--dur) var(--ease), min-height var(--slide, 480ms) cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 .hot.is-active .hot__card { border-color: var(--team); }
-.hot__avatar { padding: 4px; margin-bottom: var(--s2); }
+.hot__avatar { padding: 2px; margin-bottom: 2px; }
 .hot__avatar .avatar { transition: width 450ms cubic-bezier(0.2, 0.8, 0.2, 1), height 450ms cubic-bezier(0.2, 0.8, 0.2, 1), font-size 450ms; }
 .hot__live, .hot__state { font-size: var(--fs-caption); font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-dim); }
 .hot__state { color: var(--text-faint); }
@@ -53,7 +55,7 @@
 .hot__mic { margin-top: var(--s2); }
 .hot__mic .level-meter { width: 96px; height: 6px; }
 .hot__mic .level-meter__seg.is-lit { background: var(--team); }
-.hot__done { margin-top: var(--s3); }
+.hot__done { margin-top: var(--s1); }
 .hot__done kbd { font: inherit; font-size: var(--fs-caption); padding: 0 6px; border-radius: 4px; border: 1px solid rgba(15, 17, 21, 0.3); }
 .hot__empty { display: grid; justify-items: center; gap: var(--s2); }
 .hot__empty .muted { margin: 0; }
@@ -61,7 +63,7 @@
 .hot.is-challenged .hot__card { border-color: var(--warn); }
 
 /* Pushed aside by a challenge */
-.hot.is-compact .hot__card { min-height: 180px; padding: var(--s4) var(--s2); }
+.hot.is-compact .hot__card { height: 220px; min-height: 0; padding: var(--s3) var(--s2); }
 .hot.is-compact .hot__name { font-size: 1rem; }
 .hot.is-compact .hot__done kbd { display: none; }
 .hot.is-compact .timer--md .timer__digits { font-size: 1.125rem; padding: 6px 12px; }
@@ -89,7 +91,6 @@
 }
 @media (max-width: 1000px) {
   .stage { gap: var(--s4); }
-  .hot__card { min-height: 220px; }
 }
 /* Phone: everything stacks; the challenge sits between the two seats */
 @media (max-width: 640px) {
@@ -98,9 +99,9 @@
   .stage__center-inner { margin: 0; padding-top: 0; }
   .hot { flex-direction: row-reverse; align-items: stretch; }
   .hot .timer { justify-content: center; }
-  .hot__card, .hot.is-compact .hot__card { flex: 1; min-height: 0; flex-direction: row; flex-wrap: wrap; justify-content: flex-start; text-align: left; gap: 2px var(--s3); padding: var(--s3) var(--s4); }
+  .hot__card, .hot.is-compact .hot__card { flex: 1; height: 132px; min-height: 0; flex-direction: row; flex-wrap: wrap; justify-content: flex-start; text-align: left; gap: 2px var(--s3); padding: var(--s3) var(--s4); }
   .hot__avatar { margin: 0; padding: 0; }
-  .hot__avatar .avatar, .hot__empty-ring { width: 48px !important; height: 48px !important; font-size: 16px !important; }
+  .hot__avatar .avatar, .hot__empty .avatar { width: 48px !important; height: 48px !important; font-size: 29px !important; }
   .hot__name { font-size: 1.0625rem; justify-content: flex-start; }
   .hot__mic { display: none; }
   .hot__empty { grid-auto-flow: column; align-items: center; }

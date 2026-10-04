@@ -7,11 +7,12 @@
    ├──────────── spectators strip ──────────┤
    └──────── key hint · host controls ──────┘ */
 .room {
-  min-height: 100vh;
-  min-height: 100dvh;
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  grid-template-rows: auto 1fr auto;
+  grid-template-rows: auto minmax(0, 1fr) auto;
   gap: var(--s4);
   padding: var(--s4);
 }
@@ -54,18 +55,19 @@
 .room__main {
   display: grid;
   grid-template-columns: minmax(240px, 320px) minmax(0, 1fr) minmax(240px, 320px);
-  grid-template-rows: minmax(0, 1fr) auto auto;
+  grid-template-rows: minmax(min-content, 1fr) minmax(64px, auto) auto;
   grid-template-areas:
     'teamA stage teamB'
     'teamA facts teamB'
     'spect spect spect';
   gap: var(--s4);
   min-height: 0;
+  overflow: auto;
 }
 .room__main > .team--0 { grid-area: teamA; }
 .room__main > .team--1 { grid-area: teamB; }
 .room__main > .stage { grid-area: stage; }
-.room__main > .fact-chat { grid-area: facts; max-height: 280px; }
+.room__main > .fact-chat { grid-area: facts; max-height: min(180px, 22dvh); }
 .room__main > .spectators { grid-area: spect; }
 
 /* Team column */
@@ -79,7 +81,7 @@
 .team__score { flex: none; display: flex; align-items: baseline; gap: 4px; font-size: 1.75rem; font-weight: 700; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; color: var(--text); }
 .team__pts { font-size: 0.65rem; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-faint); }
 .team__letter { font-size: var(--fs-caption); font-weight: 500; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-faint); white-space: nowrap; }
-.team__seats { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.team__seats { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; min-height: 0; overflow-y: auto; }
 .team__seats > li + li { border-top: 1px solid var(--border); }
 
 /* Seat slot */
@@ -170,7 +172,7 @@ button.seat__open:hover .seat__take, button.seat__open:focus-visible .seat__take
 
 /* Footer row: key hint + fact check + host controls, sticky to the bottom */
 .room__footer {
-  position: sticky; bottom: var(--s4); z-index: 30;
+  position: relative; z-index: 30;
   display: flex; align-items: stretch; gap: var(--s3); flex-wrap: wrap;
 }
 .room__footer:empty { display: none; }
@@ -263,7 +265,7 @@ button.seat__open:hover .seat__take, button.seat__open:focus-visible .seat__take
 }
 /* Phone (spectator layout) */
 @media (max-width: 640px) {
-  .room { padding: var(--s3) var(--s3) calc(96px + env(safe-area-inset-bottom)); }
+  .room { padding: var(--s3) var(--s3) max(var(--s3), env(safe-area-inset-bottom)); }
   .room__header .brand, .room__view, .room__listening { display: none; }
   .room__topic { font-size: 1.25rem; }
   .room__main { grid-template-columns: 1fr; grid-template-areas: 'stage' 'teamA' 'teamB' 'facts' 'spect'; }

@@ -5,6 +5,7 @@ import './avatar.css';
 
 /** Muted solid avatar colors. White initials pass AA on all of them. */
 const COLORS = ['#4f6d8f', '#6b8f71', '#8f6b6b', '#8f7f4f', '#6b6b8f', '#4f8f8a', '#8f4f6d', '#7a7a7a'];
+const ANIMALS = ['🦊', '🐼', '🐯', '🐨', '🐸', '🦁', '🐻', '🐰', '🦉', '🐧', '🐺', '🦝'];
 
 export interface AvatarLook {
   color: string;
@@ -33,17 +34,18 @@ export interface AvatarProps {
   /** Turns on the 2px speaking ring. Ring opacity follows the inherited CSS var --level (0-1). */
   speaking?: boolean;
   className?: string;
+  variant?: 'initials' | 'animal';
 }
 
-export function Avatar({ name, size = 40, speaking = false, className = '' }: AvatarProps) {
+export function Avatar({ name, size = 40, speaking = false, className = '', variant = 'initials' }: AvatarProps) {
   const look = useMemo(() => avatarLook(name), [name]);
   return (
     <span
       className={`avatar ${speaking ? 'avatar--speaking' : ''} ${className}`}
-      style={{ width: size, height: size, background: look.color, fontSize: Math.round(size * 0.34) }}
+      style={{ width: size, height: size, background: look.color, fontSize: Math.round(size * (variant === 'animal' ? 0.6 : 0.34)) }}
       aria-hidden="true"
     >
-      {look.initials}
+      {variant === 'animal' ? ANIMALS[hashString(usernameKey(name) || '?') % ANIMALS.length] : look.initials}
     </span>
   );
 }

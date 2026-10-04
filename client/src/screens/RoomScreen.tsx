@@ -42,7 +42,6 @@ export function RoomScreen({ roomId }: { roomId: string }) {
   const [pickerOpen, setPickerOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [starting, setStarting] = useState(false);
-  const [demo, setDemo] = useState<{ busy: boolean; gemini: string | null; claude: string | null; claims: string[] }>({ busy: false, gemini: null, claude: null, claims: [] });
   const [claimPanel, setClaimPanel] = useState<ClaimPanelState>(CLOSED_PANEL);
   const factGen = useRef(0);
   const action = snapshot ? spaceAction(snapshot, myId) : null;
@@ -143,23 +142,6 @@ export function RoomScreen({ roomId }: { roomId: string }) {
   async function done() {
     const res = await room.call('turn:done');
     if (!res.ok) toast('warn', res.message);
-  }
-
-  async function runDummySummary() {
-    setDemo({ busy: true, gemini: null, claude: null, claims: [] });
-    const res = await room.call('claims:demo', undefined, 20_000);
-    if (!res.ok) {
-      setDemo({ busy: false, gemini: null, claude: null, claims: [] });
-      toast('error', res.message);
-      return;
-    }
-    const claims = Array.isArray(res.claims) ? res.claims.filter((c): c is string => typeof c === 'string') : [];
-    setDemo({
-      busy: false,
-      gemini: typeof res.gemini === 'string' ? res.gemini : null,
-      claude: typeof res.claude === 'string' ? res.claude : null,
-      claims,
-    });
   }
 
   // Browsing claims is local to the challenger: nothing pauses until they press Challenge.
@@ -312,27 +294,14 @@ export function RoomScreen({ roomId }: { roomId: string }) {
           </main>
         )}
 
-        {(demo.gemini || demo.claude) && (
-          <section className="factcheck-history tile" aria-label="Dummy fact summary">
-            <h3>TEMP TEST SUMMARY</h3>
-            <p>Gemini: {demo.gemini}</p>
-            <p>Claude: {demo.claude}</p>
-            {demo.claims.length > 0 && (
-              <ul>
-                {demo.claims.map((claim) => <li key={claim}>{claim}</li>)}
-              </ul>
-            )}
-          </section>
-        )}
-
         <div className="room__footer">
-          {snapshot.status === 'live' && (
-            <button className="btn btn--ghost btn--sm" type="button" disabled={demo.busy} onClick={() => void runDummySummary()}>
-              {demo.busy ? 'Testing summary…' : 'Test summary'}
-            </button>
-          )}
           {snapshot.status !== 'ended' && action && (
             <KeyHintBar action={action} isSpectator={me?.role === 'spectator'} onPress={press} />
+          )}
+          {!isHost && snapshot.status === 'ended' && (
+            <div className="summary__actions">
+              <button className="btn btn--primary" onClick={() => navigate('/')}><ArrowLeftIcon /> Back to rooms</button>
+            </div>
           )}
           {isHost && <HostControlBar snapshot={snapshot} hostCall={hostCall} onDelete={deleteRoom} />}
         </div>
@@ -341,13 +310,6 @@ export function RoomScreen({ roomId }: { roomId: string }) {
           locked={snapshot.game.buzz}
           challengedName={snapshot.participants.find((p) => p.id === snapshot.game.buzz?.challengedParticipantId)?.username ?? null}
         />
-
-        {!isHost && snapshot.status === 'ended' && (
-          <div className="summary__actions">
-            <button className="btn btn--primary" onClick={() => navigate('/')}><ArrowLeftIcon /> Back to rooms</button>
-          </div>
-        )}
-
         <RolePicker
           open={pickerOpen}
           snapshot={snapshot}

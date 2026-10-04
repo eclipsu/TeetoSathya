@@ -74,7 +74,7 @@ export function Lobby({ onChangeName }: { onChangeName: () => void }) {
       </header>
 
       <main className="lobby lobby--center">
-        <div className="land-split">
+        <div className={`land-split${rooms && rooms.length > 1 ? ' land-split--multiple' : ''}`}>
           <div className="land-copy">
             <section className="land" aria-label="What TeetoSathya is">
               <p className="land__pill"><span className="land__dot" aria-hidden="true" /> Live debate · Fact check game</p>
@@ -91,7 +91,7 @@ export function Lobby({ onChangeName }: { onChangeName: () => void }) {
             </section>
           </div>
 
-          <aside className="floor" aria-label="Open rooms">
+          <aside className={`floor${rooms && rooms.length > 0 ? ' floor--populated' : ''}`} aria-label="Open rooms">
             <header className="floor__bar">
               <h2>Open rooms</h2>
               <span>{rooms && rooms.length > 0 ? rooms.length : 'Sample'}</span>

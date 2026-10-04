@@ -1,0 +1,102 @@
+> node scripts/dev.mjs
+
+[server] 
+[server] > @teeto/server@0.0.0 dev
+[server] > tsx watch src/index.ts
+[server] 
+[client] 
+[client] > @teeto/client@0.0.0 dev
+[client] > vite
+[client] 
+[client] 
+[client]   VITE v8.3.2  ready in 144 ms
+[client] 
+[client]   ➜  Local:   http://localhost:5173/
+[client]   ➜  Network: http://35.0.131.61:5173/  en0
+[client] 1:56:55 AM [vite] http proxy error: /api/rooms
+[client] AggregateError [ECONNREFUSED]: 
+[client]     at internalConnectMultiple (node:net:1339:18)
+[client]     at afterConnectMultiple (node:net:1942:7)
+[server] ℹ️ INFO Connecting to SpacetimeDB WS...
+[server] [server] listening on http://0.0.0.0:3001
+[server] [server] LAN: http://35.0.131.61:3001
+[server] [spacetime] connected to https://maincloud.spacetimedb.com database tetosatya-tg079
+[server] [rooms] created y7yfcaa7 "Better vacation?" by sushil
+[server] [rooms] created we2x9esr "Is college worth it?" by sushil
+[server] [roomed 5yfm88tj "Does pineapple belong on pizza?" by sushil
+[client] 1:57:59 AM [vite] (client) hmr update /src/screens/lobby.css
+[client] 1:58:32 AM [vite] (client) hmr update /src/screens/Lobby.tsx
+[client] 1:58:32 AM [vite] (client) hmr update /src/screens/lobby.css
+[client] 1:59:12 AM [vite] (client) hmr update /src/screens/lobby.css
+[server] [livekit] deleteRoom(y7yfcaa7) failed (ok if nobody joined voice): twirp error unknown: requested room does not exist
+[server] [rooms] closed y7yfcaa7: The host deleted this room.
+[client] 2:00:29 AM [vite] ws proxy error:
+[client] Error: This socket has been ended by the other party
+[client]     at genericNodeError (node:internal/errors:985:15)
+[client]     at wrappedFn (node:internal/errors:539:14)
+[client]     at Socket.writeAfterFIN [as write] (node:net:711:14)
+[client]     at Socket.ondata (node:internal/streams/readable:1012:24)
+[client]     at Socket.emit (node:events:509:28)
+[client]     at addChunk (node:internal/streams/readable:563:12)
+[client]     at readableAddChunkPushByteMode (node:internal/streams/readable:514:3)
+[client]     at Readable.push (node:internal/streams/readable:394:5)
+[client]     at TCP.onStreamRead (node:internal/stream_base_commons:189:23)
+[client] 2:00:37 AM [vite] (client) hmr update /src/screens/RoomScreen.tsx
+[client] 2:00:37 AM [vite] ws proxy error:
+[client] Error: write EPIPE
+[client]     at afterWriteDispatched (node:internal/stream_base_commons:159:15)
+[client]     at writeGeneric (node:internal/stream_base_commons:150:3)
+[client]     at Socket._writeGeneric (node:net:1171:11)
+[client]     at Socket._write (node:net:1183:8)
+[client]     at writeOrBuffer (node:internal/streams/writable:570:12)
+[client]     at _write (node:internal/streams/writable:499:10)
+[client]     at Writable.write (node:internal/streams/writable:508:10)
+[client]     at Socket.ondata (node:internal/streams/readable:1012:24)
+[client]     at Socket.emit (node:events:509:28)
+[client]     at addChunk (node:internal/streams/readable:563:12)
+[client] 2:00:37 AM [vite] ws proxy socket error:
+[client] Error: write EPIPE
+[client]     at afterWriteDispatched (node:internal/stream_base_commons:159:15)
+[client]     at writeGeneric (node:internal/stream_base_commons:150:3)
+[client]     at Socket._writeGeneric (node:net:1171:11)
+[client]     at Socket._write (node:net:1183:8)
+[client]     at writeOrBuffer (node:internal/streams/writable:570:12)
+[client]     at _write (node:internal/streams/writable:499:10)
+[client]     at Writable.write (node:internal/streams/writable:508:10)
+[client]     at Socket.ondata (node:internal/streams/readable:1012:24)
+[client]     at Socket.emit (node:events:509:28)
+[client]     at addChunk (node:internal/streams/readable:563:12)
+[client] 2:00:37 AM [vite] (client) hmr update /src/screens/room/room.css
+[client] 2:00:38 AM [vite] (client) hmr update /src/screens/room/stage.css
+[client] 2:00:44 AM [vite] (client) hmr update /src/screens/RoomScreen.tsx
+[client] 2:00:53 AM [vite] ws proxy error:
+[client] Error: This socket has been ended by the other party
+[client]     at genericNodeError (node:internal/errors:985:15)
+[client]     at wrappedFn (node:internal/errors:539:14)
+[client]     at Socket.writeAfterFIN [as write] (node:net:711:14)
+[client]     at Socket.ondata (node:internal/streams/readable:1012:24)
+[client]     at Socket.emit (node:events:509:28)
+[client]     at addChunk (node:internal/streams/readable:563:12)
+[client]     at readableAddChunkPushByteMode (node:internal/streams/readable:514:3)
+[client]     at Readable.push (node:internal/streams/readable:394:5)
+[client]     at TCP.onStreamRead (node:internal/stream_base_commons:189:23)
+[client] 2:01:53 AM [vite] (client) hmr update /src/components/Avatar.tsx
+[client] 2:01:53 AM [vite] (client) hmr update /src/screens/room/HotSeatCard.tsx
+[client] 2:01:53 AM [vite] (client) hmr invalidate /src/components/Avatar.tsx Could not Fast Refresh ("avatarLook" export is incompatible). Learn m
+[client] 2:01:53 AM [vite] (client) hmr invalidate /src/components/Avatar.tsx Could not Fast Refresh ("avatarLook" export is incompatible). Learn more at https://github.com/vitejs/vite-plugin-react/tree/main/packages/plugin-react#consistent-components-exports
+[client] 2:01:53 AM [vite] (client) hmr update /src/screens/RoomScreen.tsx, /src/screens/Lobby.tsx, /src/screens/room/SpectatorStrip.tsx, /src/scre
+[client] 2:01:53 AM [vite] (client) hmr update /src/screens/RoomScreen.tsx, /src/screens/Lobby.tsx, /src/screens/room/SpectatorStrip.tsx, /src/screens/room/Stage.tsx, /src/screens/room/Summary.tsx, /src/screens/room/FactCheck.tsx, /src/screens/room/SeatSlot.tsx, /src/screens/room/HotSeatCard.t
+[client] 2:01:53 AM [vite] (client) hmr update /src/screens/RoomScreen.tsx, /src/screens/Lobby.tsx, /src/screens/room/SpectatorStrip.tsx, /src/screens/room/Stage.tsx, /src/screens/room/Summary.tsx, /src/screens/room/FactCheck.tsx, /src/screens/room/SeatSlot.tsx, /src/screens/room/HotSeatCard.tsx
+[client] 2:01:53 AM [vite] (client) hmr update /src/screens/room/stage.css
+[server] [livekit] deleteRoom(we2x9esr) failed (ok if nobody joined voice): twirp error unknown: requested room does not exist
+[server] [rooms] closed we2x9esr: Closed after 5 minutes with nobody connected.
+[client] 2:02:40 AM [vite] (client) hmr update /src/screens/room/room.css
+[client] 2:02:40 AM [vite] (client) hmr update /src/screens/room/stage.css
+[server] [rooms] closed 5yfm88tj: The host deleted this room.
+^C[server] 2:03:09 AM [tsx] Previous process hasn't exited yet. Force killing...
+[server] npm error Lifecycle script `dev` failed with error:
+[server] npm error code 130
+[server] npm error path /Users/sushil/Projects/TeetoSatya/server
+[server] npm error workspace @teeto/server@0.0.0
+[server] npm error location /Users/sushil/Projects/TeetoSatya/server
+[server] npm error command failed
