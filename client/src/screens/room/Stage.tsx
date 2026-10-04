@@ -55,6 +55,8 @@ export function Stage({ snapshot: s, myId, isHost, onDone, onStart, interimText,
   const g = s.game;
   const roundMs = roundRemaining(s, now);
   const runningRound = live && g.roundEndsAt !== null;
+  const resumeMs = g.factCheckResumeAt === null ? null : g.factCheckResumeAt - now;
+  const resumeSeconds = resumeMs !== null && resumeMs > 0 ? Math.ceil(resumeMs / 1000) : null;
 
   const buzzer = g.buzz ? s.participants.find((p) => p.id === g.buzz!.participantId) : undefined;
   const center: Center | null = g.factCheck
@@ -92,11 +94,17 @@ export function Stage({ snapshot: s, myId, isHost, onDone, onStart, interimText,
       <div className="stage__round">
         <Timer ms={roundMs} running={runningRound} label={roundLabel} size="lg" warn={live} />
         {live && interimText && (!challenging || center?.kind === 'pick') && <p className="transcript-live">“{interimText}”</p>}
-        {live && (g.score[0] > 0 || g.score[1] > 0) && (
-          <p className="stage__score" aria-label={`${s.sides[0]} ${g.score[0]}, ${s.sides[1]} ${g.score[1]}`}>
-            <span className="dot dot--a" />{s.sides[0]} <strong>{g.score[0]}</strong>
+        {live && (g.scores[0] > 0 || g.scores[1] > 0) && (
+          <p className="stage__score" aria-label={`${s.sides[0]} ${g.scores[0]}, ${s.sides[1]} ${g.scores[1]}`}>
+            <span className="dot dot--a" />{s.sides[0]} <strong>{g.scores[0]}</strong>
             <span className="stage__score-dash">–</span>
-            <strong>{g.score[1]}</strong> {s.sides[1]}<span className="dot dot--b" />
+            <strong>{g.scores[1]}</strong> {s.sides[1]}<span className="dot dot--b" />
+          </p>
+        )}
+        {resumeSeconds !== null && (
+          <p className="stage__countdown" role="timer" aria-live="polite" aria-label={`Resuming in ${resumeSeconds} seconds`}>
+            <span className="stage__countdown-num">{resumeSeconds}</span>
+            <span className="stage__countdown-label">Resuming</span>
           </p>
         )}
         {live && transcriptionAvailable === false && <p className="transcript-off">Transcription unavailable</p>}

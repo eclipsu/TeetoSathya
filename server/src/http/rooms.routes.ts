@@ -12,6 +12,7 @@ import type { RoomStore } from '../store/RoomStore';
 import { newRoom, summarize } from '../domain/rooms';
 import { isHostToken } from '../domain/hostAuth';
 import { sendError } from './errors';
+import { persistRoom } from '../spacetime/archive';
 
 export interface RoomsRouterDeps {
   store: RoomStore;
@@ -45,6 +46,7 @@ export function roomsRouter({ store, closeRoom }: RoomsRouterDeps): Router {
 
     const room = newRoom(parsed.value, body.hostSessionId, Date.now());
     await store.create(room);
+    persistRoom(room);
     console.log(`[rooms] created ${room.id} "${room.topic}" by ${normalizeUsername(body.hostName as string)}`);
 
     const out: CreateRoomResponse = { roomId: room.id, hostToken: room.hostToken };

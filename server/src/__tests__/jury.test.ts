@@ -4,7 +4,7 @@ import { outcomeForVerdict, openFactCheck, resolveFactCheck } from '../domain/fa
 import { setRole } from '../domain/seats';
 import * as game from '../domain/game';
 import { join, makeRoom } from './helpers';
-import { calculateJuryConfidence, calculateMajority, deliberationUser, peerAnalyses } from '../services/factChecking/jury';
+import { calculateJuryConfidence, calculateMajority, deliberationUser, peerAnalyses, topicVerdict } from '../services/factChecking/jury';
 import { applyDeliberation, round1Schema } from '../services/factChecking/schemas';
 import type { Round1Analysis } from '../services/factChecking/types';
 
@@ -15,6 +15,7 @@ function vote(model: JuryModel, finalVerdict: JuryVote['finalVerdict'], finalCon
     initialVerdict: finalVerdict,
     initialConfidence: finalConfidence,
     finalVerdict,
+    onTopic: true,
     finalConfidence,
     changedVote: false,
     reasoning: 'Known fact.',
@@ -28,6 +29,7 @@ function analysis(model: JuryModel, verdict: Round1Analysis['verdict']): Round1A
     model,
     role: model,
     verdict,
+    onTopic: true,
     confidence: 0.8,
     reasoning: `${model} reasoning`,
     keyBasis: [`${model} basis`],
@@ -77,7 +79,7 @@ describe('jury majority', () => {
 
 describe('jury schemas', () => {
   it('rejects an abstention and an out-of-range confidence', () => {
-    const base = { confidence: 0.8, reasoning: 'Because.', keyBasis: ['fact'], limitations: ['none known'] };
+    const base = { onTopic: true, confidence: 0.8, reasoning: 'Because.', keyBasis: ['fact'], limitations: ['none known'] };
     expect(() => round1Schema.parse({ ...base, verdict: 'INCONCLUSIVE' })).toThrow();
     expect(() => round1Schema.parse({ ...base, verdict: 'CORRECT', confidence: 150 })).toThrow();
     expect(round1Schema.parse({ ...base, verdict: 'CORRECT', confidence: 85 }).confidence).toBe(0.85);
@@ -89,6 +91,7 @@ describe('jury schemas', () => {
       initialVerdict: 'INCORRECT',
       initialConfidence: 0.1,
       finalVerdict: 'CORRECT',
+      onTopic: true,
       finalConfidence: 0.7,
       changedVote: true,
       responseToOthers: 'Their objection does not land.',
@@ -102,6 +105,7 @@ describe('jury schemas', () => {
       initialVerdict: 'CORRECT',
       initialConfidence: 0.8,
       finalVerdict: 'INCORRECT',
+      onTopic: true,
       finalConfidence: 0.66,
       changedVote: false,
       responseToOthers: 'The qualifier was missed.',
@@ -110,6 +114,24 @@ describe('jury schemas', () => {
     expect(flipped.changedVote).toBe(true);
     expect(flipped.finalVerdict).toBe('INCORRECT');
     expect(flipped.model).toBe('claude');
+  });
+
+  it('forces an off-topic claim to incorrect', () => {
+    const own = analysis('gemini', 'CORRECT');
+    const forced = applyDeliberation(own, JSON.stringify({
+      initialVerdict: 'CORRECT',
+      initialConfidence: 0.9,
+      finalVerdict: 'CORRECT',
+      onTopic: false,
+      finalConfidence: 0.9,
+      changedVote: false,
+      responseToOthers: 'True, but not about this debate.',
+      finalReasoning: 'The fact is about a different subject.',
+    }));
+    expect(forced.onTopic).toBe(false);
+    expect(forced.finalVerdict).toBe('INCORRECT');
+    expect(topicVerdict([forced, { onTopic: false }], 'CORRECT')).toEqual({ verdict: 'INCORRECT', offTopic: true });
+    expect(topicVerdict([forced, { onTopic: true }], null)).toEqual({ verdict: null, offTopic: false });
   });
 });
 
@@ -156,6 +178,7 @@ describe('challenge outcome', () => {
         votesForIncorrect: 3,
         juryConfidence: 0.99,
         unanimous: true,
+        offTopic: false,
         votes: [vote('gemini', 'INCORRECT', 0.99), vote('claude', 'INCORRECT', 0.99), vote('chatgpt', 'INCORRECT', 0.99)],
         completedAt: 1,
       },

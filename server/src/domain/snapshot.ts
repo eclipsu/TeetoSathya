@@ -1,4 +1,4 @@
-import { scoreFactChecks, type FactCheckView, type GameView, type ParticipantView, type RoomSnapshot } from '@teeto/shared';
+import type { FactCheckView, GameView, ParticipantView, RoomSnapshot } from '@teeto/shared';
 import type { FactCheckChallenge, Room } from './model';
 
 function toFactCheckView(f: FactCheckChallenge): FactCheckView {
@@ -19,6 +19,7 @@ function toFactCheckView(f: FactCheckChallenge): FactCheckView {
     thread: f.thread,
     thinking: f.thinking,
     createdAt: f.createdAt,
+    scoreDelta: f.scoreDelta,
   };
 }
 
@@ -48,6 +49,7 @@ export function toSnapshot(room: Room, now: number): RoomSnapshot {
     buzz: g.buzz
       ? { participantId: idOf(g.buzz.sessionId) ?? '', username: g.buzz.username, at: g.buzz.at, challengedParticipantId: idOf(g.buzz.challengedSessionId) }
       : null,
+    factCheckResumeAt: g.factCheckResumeAt,
     factCheck: (() => {
       const active = g.activeFactCheckId ? g.factChecks.find((f) => f.id === g.activeFactCheckId) : undefined;
       return active ? toFactCheckView(active) : null;
@@ -55,7 +57,7 @@ export function toSnapshot(room: Room, now: number): RoomSnapshot {
     factChecks: g.factChecks.map(toFactCheckView),
     factCheckUsedIds: [...g.factCheckUsed].map((sid) => idOf(sid)).filter((id): id is string => !!id),
     consideringIds: [...g.considering].map((sid) => idOf(sid)).filter((id): id is string => !!id),
-    score: scoreFactChecks(g.factChecks),
+    scores: [g.scores[0], g.scores[1]],
     winner: room.status === 'ended' ? g.winner : null,
   };
   return { id: room.id, topic: room.topic, sides: room.sides, status: room.status, settings: room.settings, participants, game, serverNow: now };

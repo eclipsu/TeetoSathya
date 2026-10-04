@@ -76,6 +76,8 @@ export interface FactCheckChallenge {
   thread: JuryMessage[];
   thinking: JuryModel[];
   createdAt: number;
+  /** Set once, when the check resolves. 100, -50, or 0. */
+  scoreDelta: number | null;
 }
 
 export interface GameState {
@@ -97,6 +99,10 @@ export interface GameState {
   considering: Set<string>;
   /** Decided when the round ends (by score), or by the host on a tie. */
   winner: RoundWinner | null;
+  /** Server time when a finished fact check should resume the clocks. Null while the jury is still working. */
+  factCheckResumeAt: number | null;
+  /** Team A, Team B. Reset at the start of each round. */
+  scores: [number, number];
   segments: TranscriptSegment[];
   claims: ExtractedClaim[];
   factChecks: FactCheckChallenge[];
@@ -134,6 +140,8 @@ export function initialGameState(turnSeconds: number): GameState {
     factCheckUsed: new Set(),
     considering: new Set(),
     winner: null,
+    factCheckResumeAt: null,
+    scores: [0, 0],
     segments: [],
     claims: [],
     factChecks: [],

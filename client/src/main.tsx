@@ -3,9 +3,12 @@ import { createRoot } from 'react-dom/client';
 import './styles/tokens.css';
 import './styles/base.css';
 import { App } from './App';
+import { HostedSpacetimeProvider } from './spacetime/hosted';
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <App />
+    <HostedSpacetimeProvider>
+      <App />
+    </HostedSpacetimeProvider>
   </StrictMode>,
 );

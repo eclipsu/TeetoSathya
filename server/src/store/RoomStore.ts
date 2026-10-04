@@ -1,11 +1,13 @@
-import type { Room } from '../domain/model';
+import type { Room } from "../domain/model";
 
 /**
  * The single seam between game logic and persistence.
  *
- * Today: InMemoryRoomStore. Later: a database-backed store (SpacetimeDB or other).
- * `update` takes a SYNCHRONOUS mutator so each change is atomic: the in-memory store
- * runs it inline; a DB store would run it inside a transaction / reducer.
+ * InMemoryRoomStore is still the live authority for Socket.IO snapshots.
+ * Hosted SpacetimeDB (Maincloud) is the module that will own structured game state.
+ * Do not write the same score, queue, or phase to both. Cut a handler over by
+ * calling a reducer, then projecting the committed row back into this Room.
+ * `update` takes a SYNCHRONOUS mutator so each in-memory change is atomic.
  */
 export interface RoomStore {
   create(room: Room): Promise<void>;

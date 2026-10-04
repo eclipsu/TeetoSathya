@@ -5,6 +5,8 @@ export interface Round1Analysis {
   model: JuryModel;
   role: string;
   verdict: JuryBinary;
+  /** False when the claim is about a different subject than the room topic. */
+  onTopic: boolean;
   confidence: number;
   reasoning: string;
   keyBasis: string[];

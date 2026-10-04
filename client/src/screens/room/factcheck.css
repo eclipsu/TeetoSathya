@@ -115,3 +115,8 @@
 .jmsg__caret { display: inline-block; width: 2px; height: 1em; margin-left: 2px; vertical-align: -2px; background: var(--text-dim); animation: caret 0.8s steps(1) infinite; }
 @keyframes caret { 50% { opacity: 0; } }
 .jury__resume { align-self: center; font-size: var(--fs-caption); color: var(--text-faint); animation: fade-in var(--dur) var(--ease) 600ms both; }
+
+.fact-points { display: inline-block; font-size: var(--fs-label); font-weight: 600; font-variant-numeric: tabular-nums; }
+.fact-points--up { color: var(--ok); }
+.fact-points--down { color: var(--danger); }
+.fact-msg .fact-points { margin-top: 2px; }

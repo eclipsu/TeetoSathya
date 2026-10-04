@@ -35,8 +35,8 @@ async function generate(system: string, user: string, schema: unknown, signal: A
   throw last ?? new Error('Gemini returned no jury text.');
 }
 
-export async function geminiIndependent(claim: string, signal: AbortSignal): Promise<Round1Analysis> {
-  const text = await generate(ROUND1_SYSTEM.gemini, claimOnlyUser(claim), ROUND1_JSON_SCHEMA, signal);
+export async function geminiIndependent(claim: string, topic: string, signal: AbortSignal): Promise<Round1Analysis> {
+  const text = await generate(ROUND1_SYSTEM.gemini, claimOnlyUser(claim, topic), ROUND1_JSON_SCHEMA, signal);
   return readRound1('gemini', JURY_ROLES.gemini, text);
 }
 

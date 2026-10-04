@@ -1,0 +1,37 @@
+/* Past debates: saved rooms on the left, the picked room's rounds and checks on the right. */
+.history { width: min(1120px, 100%); margin: 0 auto; padding: var(--s6) var(--s4) var(--s7); }
+.history__head { display: flex; align-items: center; gap: var(--s3); margin-bottom: var(--s5); }
+.history__head h1 { margin: 0; font-size: var(--fs-heading); letter-spacing: -0.01em; }
+.history__layout { display: grid; grid-template-columns: minmax(220px, 320px) minmax(0, 1fr); gap: var(--s4); align-items: start; }
+
+.history__list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--s2); }
+.history__pick {
+  width: 100%;
+  display: flex; flex-direction: column; gap: 2px;
+  padding: var(--s3) var(--s4);
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text); font: inherit; font-size: 0.875rem; text-align: left;
+  cursor: pointer;
+  transition: background var(--dur) var(--ease), border-color var(--dur) var(--ease);
+}
+.history__pick:hover { background: var(--surface-hover); }
+.history__pick .muted { font-size: var(--fs-label); }
+.history__pick--on { border-color: var(--text); }
+
+.history__detail { padding: var(--s5); border-radius: var(--radius); border: 1px solid var(--border); background: var(--surface); min-width: 0; }
+.history__detail h2 { margin: 0 0 var(--s3); font-size: 1.125rem; letter-spacing: -0.01em; }
+.history__detail h3 { margin: var(--s4) 0 var(--s2); font-size: var(--fs-label); font-weight: 500; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-dim); }
+.history__rounds { display: flex; flex-wrap: wrap; gap: var(--s2); margin-bottom: var(--s3); }
+.history__facts, .history__detail ul { list-style: none; margin: 0 0 var(--s4); padding: 0; display: flex; flex-direction: column; gap: var(--s2); font-size: 0.875rem; }
+.history__facts li { padding-bottom: var(--s2); border-bottom: 1px solid var(--border); }
+.history__facts p, .history__detail li { margin: 0; }
+.history__facts .muted { font-size: var(--fs-label); font-variant-numeric: tabular-nums; }
+
+@media (max-width: 800px) {
+  .history__layout { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 640px) {
+  .history { padding: var(--s4); }
+}

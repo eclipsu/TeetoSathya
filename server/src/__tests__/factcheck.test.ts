@@ -4,6 +4,8 @@ import { setRole } from '../domain/seats';
 import { canPublish } from '../domain/micPolicy';
 import {
   addJuryMessage,
+  beginFactCheckCountdown,
+  FACT_CHECK_RESUME_MS,
   canFactCheck,
   coerceVerdict,
   dismissFactCheck,
@@ -120,6 +122,27 @@ describe('recent claims', () => {
     expect(getRecentClaims(room, room.hostSessionId, 4).map((c) => c.id)).toEqual(['c6', 'c5', 'c4', 'c3']);
   });
 
+  it("does not offer another room's claims for the same speaker", () => {
+    const here = liveRoom();
+    const there = liveRoom();
+    addClaim(here, here.hostSessionId, 0, 'here', 'This room said the sky is blue.');
+    addClaim(there, there.hostSessionId, 0, 'there', 'The other room said the sky is green.');
+    there.game.claims.push({
+      id: 'carried',
+      roomId: here.id,
+      speakerSessionId: there.hostSessionId,
+      team: 0,
+      text: 'A fact carried over from the other room.',
+      originalText: 'A fact carried over from the other room.',
+      createdAt: 3,
+      roundSeq: there.game.roundSeq,
+    });
+    expect(getRecentClaims(here, here.hostSessionId).map((c) => c.id)).toEqual(['here']);
+    expect(getRecentClaims(there, there.hostSessionId).map((c) => c.id)).toEqual(['there']);
+    const challenged = openFactCheck(there, 'sess-b1-00001', 'carried', T0 + 1000, 'fc-cross');
+    expect(challenged.ok).toBe(false);
+  });
+
   it('does not store the same claim twice for one speaker', () => {
     const room = liveRoom();
     addClaim(room, room.hostSessionId, 0, 'c1', 'YouTube was founded in 2005.');
@@ -150,6 +173,7 @@ describe('submitting a challenge', () => {
     openFactCheck(room, 'sess-b2-00001', 'c1', T0 + 1000, 'fc1');
     const resolved = resolveFactCheck(room, 'fc1', { verdict: 'SUPPORTED', confidence: 0.95, explanation: 'There are 50 states.' });
     expect(resolved.ok && resolved.challenge.outcome).toBe('failed');
+    expect(room.game.scores).toEqual([0, -50]);
   });
 
   it('CONTRADICTED is a successful challenge', () => {
@@ -158,8 +182,31 @@ describe('submitting a challenge', () => {
     openFactCheck(room, 'sess-b2-00001', 'c1', T0 + 1000, 'fc1');
     const resolved = resolveFactCheck(room, 'fc1', { verdict: 'CONTRADICTED', confidence: 0.99, explanation: 'The capital is Canberra.' });
     expect(resolved.ok && resolved.challenge.outcome).toBe('successful');
+    expect(room.game.scores).toEqual([0, 100]);
+    expect(resolveFactCheck(room, 'fc1', { verdict: 'CONTRADICTED', confidence: 0.99, explanation: 'The capital is Canberra.' }).ok).toBe(false);
+    expect(room.game.scores).toEqual([0, 100]);
     expect(dismissFactCheck(room, T0 + 2000).ok).toBe(true);
     expect(room.game.paused).toBe(false);
+    expect(room.game.activeSide).toBe(0);
+  });
+
+  it('counts down and then resumes on its own', () => {
+    const room = liveRoom();
+    addClaim(room, room.hostSessionId, 0, 'c1', 'The capital of Australia is Sydney.');
+    openFactCheck(room, 'sess-b2-00001', 'c1', T0 + 1000, 'fc1');
+    resolveFactCheck(room, 'fc1', { verdict: 'CONTRADICTED', confidence: 0.99, explanation: 'The capital is Canberra.' });
+    beginFactCheckCountdown(room, T0 + 2000);
+    const resumeAt = T0 + 2000 + FACT_CHECK_RESUME_MS;
+    expect(room.game.paused).toBe(true);
+    expect(game.nextDeadline(room)).toBe(resumeAt);
+    game.tick(room, resumeAt - 1);
+    expect(room.game.paused).toBe(true);
+    expect(room.game.activeFactCheckId).toBe('fc1');
+    const resumed = game.tick(room, resumeAt);
+    expect(resumed.ok).toBe(true);
+    expect(room.game.paused).toBe(false);
+    expect(room.game.activeFactCheckId).toBeNull();
+    expect(room.game.factCheckResumeAt).toBeNull();
     expect(room.game.activeSide).toBe(0);
   });
 
@@ -234,20 +281,8 @@ describe('considering a challenge', () => {
   });
 });
 
-describe('automatic resume after a verdict', () => {
-  it('only dismisses the check it was scheduled for', () => {
-    const room = liveRoom();
-    addClaim(room, room.hostSessionId, 0, 'c1', 'The capital of Australia is Sydney.');
-    openFactCheck(room, 'sess-b1-00001', 'c1', T0 + 1000, 'fc1');
-    resolveFactCheck(room, 'fc1', { verdict: 'INCORRECT', confidence: 0.9, explanation: 'No.' });
-    expect(dismissFactCheck(room, T0 + 2000, 'other').ok).toBe(false);
-    expect(dismissFactCheck(room, T0 + 2000, 'fc1').ok).toBe(true);
-    expect(room.game.paused).toBe(false);
-  });
-});
-
 describe('round winner', () => {
-  it('a landed challenge scores for the challenger and decides the winner', () => {
+  it('a landed challenge scores +100 for the challenger and decides the winner', () => {
     const room = liveRoom();
     addClaim(room, room.hostSessionId, 0, 'c1', 'The capital of Australia is Sydney.');
     openFactCheck(room, 'sess-b1-00001', 'c1', T0 + 1000, 'fc1');

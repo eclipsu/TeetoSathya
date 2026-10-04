@@ -100,6 +100,8 @@ function finalOf(f: FactCheckView): Final {
   if (f.unavailable) return { text: 'No decision', detail: 'The jury could not finish.', kind: 'mid' };
   const j = f.jury;
   const tally = j?.verdict ? `${Math.max(j.votesForCorrect, j.votesForIncorrect)}–${Math.min(j.votesForCorrect, j.votesForIncorrect)} · ${pct(j.juryConfidence)}` : null;
+  // Every juror found the claim off the room topic: it counts as incorrect.
+  if (j?.offTopic) return { text: 'Different and incorrect', detail: tally && `${tally} · off topic · challenge lands`, kind: 'bad' };
   if (f.verdict === 'INCORRECT' || f.verdict === 'CONTRADICTED') return { text: 'Claim is incorrect', detail: tally && `${tally} · challenge lands`, kind: 'bad' };
   if (f.verdict === 'CORRECT' || f.verdict === 'SUPPORTED') return { text: 'Claim stands', detail: tally && `${tally} · challenge fails`, kind: 'ok' };
   if (j && !j.verdict) return { text: 'Jury split', detail: 'No decision', kind: 'mid' };
@@ -212,6 +214,7 @@ export function JuryThread({ check }: { check: FactCheckView }) {
         <li className={`jury__verdict jury__verdict--${final.kind}`}>
           <span className="jury__verdict-text">{final.text}</span>
           {final.detail && <span className="jury__verdict-detail">{final.detail}</span>}
+          <Points delta={check.scoreDelta} />
         </li>
       )}
       {check.status === 'resolved' && (
@@ -238,6 +241,12 @@ export function ChallengeCard({ check }: { check: FactCheckView }) {
   );
 }
 
+/** Points this check gave the challenger's team. Nothing while running or for no decision. */
+function Points({ delta }: { delta: number | null }) {
+  if (delta == null || delta === 0) return null;
+  return <span className={`fact-points fact-points--${delta > 0 ? 'up' : 'down'}`}>{delta > 0 ? `+${delta}` : `−${Math.abs(delta)}`} points</span>;
+}
+
 /** Left-bar history of this round's checks: one line each, result at the end. */
 export function FactChat({ items }: { items: FactCheckView[] }) {
   const log = useRef<HTMLDivElement>(null);
@@ -260,6 +269,7 @@ export function FactChat({ items }: { items: FactCheckView[] }) {
                 {final.text}{final.kind === 'wait' && '…'}
                 {final.detail && <span className="fact-msg__detail"> · {final.detail}</span>}
               </p>
+              <Points delta={item.scoreDelta} />
             </article>
           );
         })}

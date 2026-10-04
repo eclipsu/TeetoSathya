@@ -17,6 +17,7 @@ const notes = z.array(z.string().trim().min(1).max(240)).max(6);
 /** Round 1. The server stamps model and role; the model cannot choose its identity. */
 export const round1Schema = z.object({
   verdict: binary,
+  onTopic: z.boolean(),
   confidence,
   reasoning: shortText,
   keyBasis: notes,
@@ -28,6 +29,7 @@ export const round2Schema = z.object({
   initialVerdict: binary,
   initialConfidence: confidence,
   finalVerdict: binary,
+  onTopic: z.boolean(),
   finalConfidence: confidence,
   changedVote: z.boolean(),
   responseToOthers: shortText,
@@ -42,12 +44,13 @@ export const ROUND1_JSON_SCHEMA = {
   additionalProperties: false,
   properties: {
     verdict: { type: 'string', enum: ['CORRECT', 'INCORRECT'] },
+    onTopic: { type: 'boolean' },
     confidence: { type: 'number' },
     reasoning: { type: 'string' },
     keyBasis: { type: 'array', items: { type: 'string' } },
     limitations: { type: 'array', items: { type: 'string' } },
   },
-  required: ['verdict', 'confidence', 'reasoning', 'keyBasis', 'limitations'],
+  required: ['verdict', 'onTopic', 'confidence', 'reasoning', 'keyBasis', 'limitations'],
 } as const;
 
 export const ROUND2_JSON_SCHEMA = {
@@ -57,12 +60,13 @@ export const ROUND2_JSON_SCHEMA = {
     initialVerdict: { type: 'string', enum: ['CORRECT', 'INCORRECT'] },
     initialConfidence: { type: 'number' },
     finalVerdict: { type: 'string', enum: ['CORRECT', 'INCORRECT'] },
+    onTopic: { type: 'boolean' },
     finalConfidence: { type: 'number' },
     changedVote: { type: 'boolean' },
     responseToOthers: { type: 'string' },
     finalReasoning: { type: 'string' },
   },
-  required: ['initialVerdict', 'initialConfidence', 'finalVerdict', 'finalConfidence', 'changedVote', 'responseToOthers', 'finalReasoning'],
+  required: ['initialVerdict', 'initialConfidence', 'finalVerdict', 'onTopic', 'finalConfidence', 'changedVote', 'responseToOthers', 'finalReasoning'],
 } as const;
 
 export function parseModelJson(text: string): unknown {
@@ -75,7 +79,8 @@ export function readRound1(model: JuryModel, role: string, text: string): Round1
   return {
     model,
     role,
-    verdict: parsed.verdict,
+    verdict: parsed.onTopic ? parsed.verdict : 'INCORRECT',
+    onTopic: parsed.onTopic,
     confidence: parsed.confidence,
     reasoning: parsed.reasoning,
     keyBasis: parsed.keyBasis,
@@ -86,10 +91,11 @@ export function readRound1(model: JuryModel, role: string, text: string): Round1
 /** Trust Round 1 for the initial vote. The model's changedVote flag is not used. */
 export function applyDeliberation(own: Round1Analysis, text: string): JuryVote {
   const parsed = round2Schema.parse(parseModelJson(text));
-  const finalVerdict: JuryBinary = parsed.finalVerdict;
+  const finalVerdict: JuryBinary = parsed.onTopic ? parsed.finalVerdict : 'INCORRECT';
   return {
     model: own.model,
     role: own.role,
+    onTopic: parsed.onTopic,
     initialVerdict: own.verdict,
     initialConfidence: own.confidence,
     finalVerdict,

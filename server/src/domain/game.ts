@@ -1,4 +1,4 @@
-import { scoreFactChecks, winnerByScore, type RoundWinner, type TeamIndex, type ToastType } from '@teeto/shared';
+import { winnerByScore, type RoundWinner, type TeamIndex, type ToastType } from '@teeto/shared';
 import type { Buzz, Participant, Room } from './model';
 import { speakersOnTeam } from './seats';
 
@@ -118,6 +118,8 @@ export function startRound(room: Room, now: number): GameResult {
   g.factCheckUsed = new Set();
   g.considering = new Set();
   g.winner = null;
+  g.factCheckResumeAt = null;
+  g.scores = [0, 0];
   g.segments = [];
   g.claims = [];
   g.factChecks = [];
@@ -236,6 +238,7 @@ export function endRound(room: Room, now: number): GameResult {
     active.status = 'resolved';
     active.verdict = 'INCONCLUSIVE';
     active.outcome = 'no_decision';
+    active.scoreDelta = 0;
     active.unavailable = true;
     active.explanation = 'Fact check unavailable.';
     active.confidence = null;
@@ -244,6 +247,7 @@ export function endRound(room: Room, now: number): GameResult {
   }
   g.activeFactCheckId = null;
   g.considering.clear();
+  g.factCheckResumeAt = null;
   room.status = 'ended';
   g.roundRemainingMs = g.roundEndsAt !== null ? Math.max(0, g.roundEndsAt - now) : g.roundRemainingMs;
   g.roundEndsAt = null;
@@ -251,18 +255,17 @@ export function endRound(room: Room, now: number): GameResult {
   g.paused = false;
   g.buzz = null;
   g.activeSide = null;
-  const score = scoreFactChecks(g.factChecks);
+  const score = g.scores;
   g.winner = winnerByScore(score);
   if (g.winner === null) return ok({ type: 'info', message: `The round is over. Tied ${score[0]}–${score[1]}: the host picks the winner.` });
-  return ok({ type: 'success', message: `The round is over. ${room.sides[g.winner]} wins ${Math.max(...score)}–${Math.min(...score)}.` });
+  return ok({ type: 'success', message: `The round is over. ${room.sides[g.winner]} wins ${score[g.winner]}–${score[other(g.winner)]}.` });
 }
 
 /** Host breaks a tie after the round. A decided winner can't be changed. */
 export function pickWinner(room: Room, winner: RoundWinner): GameResult {
   if (room.status !== 'ended') return fail('The round has not ended yet.');
   if (room.game.winner !== null) return fail('The winner is already decided.');
-  const score = scoreFactChecks(room.game.factChecks);
-  if (winnerByScore(score) !== null) return fail('The score already decides the winner.');
+  if (winnerByScore(room.game.scores) !== null) return fail('The score already decides the winner.');
   room.game.winner = winner;
   return ok({ type: 'success', message: winner === 'draw' ? 'The host called it a draw.' : `The host picked ${room.sides[winner]} as the winner.` });
 }
@@ -275,10 +278,12 @@ export function updateSettings(room: Room, turnSeconds: number, roundSeconds: nu
   return ok({ type: 'info', message: `Clock set: ${turnSeconds}s per speaker, ${Math.round(roundSeconds / 60)} min round.` });
 }
 
-/** When the next server-side timer must fire (clock or round expiry), or null if nothing runs. */
+/** When the next server-side timer must fire (fact-check resume, clock, or round expiry). */
 export function nextDeadline(room: Room): number | null {
   const g = room.game;
-  if (room.status !== 'live' || g.clockRunningSince === null || g.activeSide === null) return null;
+  if (room.status !== 'live') return null;
+  if (g.factCheckResumeAt !== null) return g.factCheckResumeAt;
+  if (g.clockRunningSince === null || g.activeSide === null) return null;
   const clockEnd = g.clockRunningSince + g.clocks[g.activeSide];
   return g.roundEndsAt !== null ? Math.min(clockEnd, g.roundEndsAt) : clockEnd;
 }
@@ -286,7 +291,16 @@ export function nextDeadline(room: Room): number | null {
 /** Called by the timer engine at (or after) nextDeadline. Idempotent if nothing expired. */
 export function tick(room: Room, now: number): GameResult {
   const g = room.game;
-  if (room.status !== 'live' || g.clockRunningSince === null || g.activeSide === null) return ok();
+  if (room.status !== 'live') return ok();
+  if (g.factCheckResumeAt !== null && now >= g.factCheckResumeAt) {
+    g.factCheckResumeAt = null;
+    const challenge = g.factChecks.find((f) => f.id === g.activeFactCheckId);
+    if (!challenge || challenge.status === 'checking') return ok();
+    g.activeFactCheckId = null;
+    if (g.paused && !g.buzz) unfreeze(room, now);
+    return ok({ type: 'info', message: 'Fact check over. Clock running.' });
+  }
+  if (g.clockRunningSince === null || g.activeSide === null) return ok();
   if (g.roundEndsAt !== null && now >= g.roundEndsAt) {
     endRound(room, g.roundEndsAt);
     return ok({ type: 'info', message: "Time! The round is over." });

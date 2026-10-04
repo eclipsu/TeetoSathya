@@ -110,3 +110,8 @@
 .stage__score strong { color: var(--text); font-size: 0.9375rem; }
 .stage__score .dot { width: 6px; height: 6px; }
 .stage__score-dash { color: var(--text-faint); }
+
+/* Verdict is in: seconds until the clocks restart on their own */
+.stage__countdown { display: inline-flex; align-items: baseline; gap: var(--s2); margin: 0; animation: fade-in var(--dur) var(--ease); }
+.stage__countdown-num { font-size: 1.75rem; font-weight: 600; line-height: 1; font-variant-numeric: tabular-nums; color: var(--warn); }
+.stage__countdown-label { font-size: var(--fs-label); font-weight: 500; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-dim); }

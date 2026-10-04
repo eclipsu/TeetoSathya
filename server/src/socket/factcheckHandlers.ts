@@ -1,6 +1,6 @@
 import { nanoid } from 'nanoid';
 import type { Room } from '../domain/model';
-import { activeSpeaker, addJuryMessage, canFactCheck, dismissFactCheck, getRecentClaims, mergeClaims, openFactCheck, resolveFactCheck, setConsidering, setJuryPhase, setJuryThinking } from '../domain/factcheck';
+import { activeSpeaker, addJuryMessage, beginFactCheckCountdown, canFactCheck, dismissFactCheck, getRecentClaims, mergeClaims, openFactCheck, resolveFactCheck, setConsidering, setJuryPhase, setJuryThinking } from '../domain/factcheck';
 import { DUMMY_SPEECH, probeClaimExtraction } from '../services/claimExtractor';
 import { runJury } from '../services/factChecking/jury';
 import { HandlerError, type AppSocket, type RoomHub } from './hub';
@@ -11,8 +11,6 @@ const THINK_MS = 2500;
 const MESSAGE_GAP_MS = 1400;
 /** Time the client spends typing out the last message before the verdict shows. */
 const TYPE_OUT_MS = 1800;
-/** Verdict stays on screen this long, then the round resumes by itself. */
-const VERDICT_HOLD_MS = 3500;
 
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, Math.max(0, ms)));
 
@@ -111,6 +109,7 @@ function safeJuryError(err: unknown): string {
 }
 
 async function judge(hub: RoomHub, roomId: string, challengeId: string, claimId: string, claim: string): Promise<void> {
+  const topic = (await hub.store.get(roomId))?.topic ?? '';
   let resolution: { verdict: 'CORRECT' | 'INCORRECT' | 'INCONCLUSIVE'; confidence: number; explanation: string; unavailable?: boolean; jury?: Awaited<ReturnType<typeof runJury>> | null };
   try {
     const push = async (apply: (room: Room) => boolean) => {
@@ -130,7 +129,7 @@ async function judge(hub: RoomHub, roomId: string, challengeId: string, claimId:
       });
       return queue;
     };
-    const jury = await runJury(claimId, claim, {
+    const jury = await runJury(claimId, claim, topic, {
       onPhase: (phase) => paced(() => 0, (room) => setJuryPhase(room, challengeId, phase)),
       onThinking: (models) => paced(() => lastMessageAt ? lastMessageAt + MESSAGE_GAP_MS - Date.now() : 0, (room) => setJuryThinking(room, challengeId, models), () => { thinkingSince = Date.now(); }),
       onMessage: (message) => paced(
@@ -146,7 +145,7 @@ async function judge(hub: RoomHub, roomId: string, challengeId: string, claimId:
       ? {
         verdict: jury.verdict,
         confidence: jury.juryConfidence,
-        explanation: `${jury.votesForCorrect}–${jury.votesForIncorrect} ${jury.verdict}`,
+        explanation: jury.offTopic ? 'Different and incorrect' : `${jury.votesForCorrect}–${jury.votesForIncorrect} ${jury.verdict}`,
         jury,
       }
       : {
@@ -159,23 +158,15 @@ async function judge(hub: RoomHub, roomId: string, challengeId: string, claimId:
     console.warn('[jury] failed:', safeJuryError(err));
     resolution = { verdict: 'INCONCLUSIVE', confidence: 0, explanation: 'JURY ERROR', unavailable: true, jury: null };
   }
-  const updated = await hub.store.update(roomId, (room: Room) => ({
-    room,
-    res: resolveFactCheck(room, challengeId, resolution),
-  }));
+  // The verdict holds the stage for FACT_CHECK_RESUME_MS, then the game timer resumes the clocks.
+  const updated = await hub.store.update(roomId, (room: Room) => {
+    const res = resolveFactCheck(room, challengeId, resolution);
+    if (res.ok) beginFactCheckCountdown(room, Date.now());
+    return { room, res };
+  });
   if (!updated?.res.ok) return;
   try {
     await hub.changed(updated.room);
-  } catch (err) {
-    console.error('[factcheck] broadcast failed', err);
-  }
-
-  // Hold the verdict on screen, then resume the round. The host can still dismiss sooner.
-  await sleep(VERDICT_HOLD_MS);
-  const resumed = await hub.store.update(roomId, (room: Room) => ({ room, res: dismissFactCheck(room, Date.now(), challengeId) }));
-  if (!resumed?.res.ok) return;
-  try {
-    await hub.changed(resumed.room);
   } catch (err) {
     console.error('[factcheck] broadcast failed', err);
   }

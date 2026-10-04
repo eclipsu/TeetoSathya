@@ -27,6 +27,7 @@ import { HostControlBar } from './room/HostControlBar';
 import { Stage } from './room/Stage';
 import { Summary } from './room/Summary';
 import { ClaimPanel, FactChat, FactCheckButton, type ClaimPanelState } from './room/FactCheck';
+import { HostedRoomSubscription, hostedSpacetimeDatabase } from '../spacetime/hosted';
 import './room/room.css';
 import './room/stage.css';
 
@@ -217,6 +218,7 @@ export function RoomScreen({ roomId }: { roomId: string }) {
 
   return (
     <VoiceProvider roomId={roomId} holdMic={!!snapshot.game.factCheck} onConnected={() => void room.call('voice:joined')}>
+      {hostedSpacetimeDatabase ? <HostedRoomSubscription roomId={roomId} /> : null}
       <FloorCapture socket={room.socket} enabled={holdsFloor} />
       <div className="room" data-status={snapshot.status} data-host={isHost}>
         <header className="room__header tile">

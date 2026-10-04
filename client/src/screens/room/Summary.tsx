@@ -25,7 +25,7 @@ interface Props {
 export function Summary({ snapshot: s, isHost, onPickWinner }: Props) {
   const budget = s.settings.turnSeconds * 1000;
   const roundUsed = s.settings.roundSeconds * 1000 - (s.game.roundRemainingMs ?? 0);
-  const { score, winner } = s.game;
+  const { scores: score, winner } = s.game;
   const won = winner === 0 || winner === 1 ? winner : null;
   return (
     <section className="summary tile" aria-labelledby="summary-title">
@@ -57,7 +57,7 @@ export function Summary({ snapshot: s, isHost, onPickWinner }: Props) {
             <p className="muted summary__tie-wait">Tied on fact-check points. Waiting for the host to pick the winner.</p>
           )
         )}
-        <p className="summary__rule">A challenge that lands scores for the challenger's side. One that fails scores for the speaker's side.</p>
+        <p className="summary__rule">A challenge that lands is +100 for the challenger's side. One that fails is −50 for the challenger's side.</p>
       </div>
       <div className="summary__teams">
         {([0, 1] as const).map((side) => {

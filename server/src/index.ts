@@ -13,6 +13,7 @@ import { installGameHandlers } from './socket/gameHandlers';
 import { installFactCheckHandlers } from './socket/factcheckHandlers';
 import { installGameTimers } from './engine/gameTimers';
 import { installTranscription } from './services/transcription';
+import { connectHostedSpacetime } from './spacetime/hosted';
 
 const store = new InMemoryRoomStore();
 
@@ -36,6 +37,8 @@ hub.start();
 app.use('/api', healthRouter);
 app.use('/api', livekitRouter(store));
 app.use('/api', roomsRouter({ store, closeRoom: (id, reason) => hub.closeRoom(id, reason) }));
+
+connectHostedSpacetime();
 
 httpServer.listen(config.port, '0.0.0.0', () => {
   console.log(`[server] listening on http://0.0.0.0:${config.port}`);

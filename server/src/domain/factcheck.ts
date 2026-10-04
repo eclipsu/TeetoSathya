@@ -42,9 +42,9 @@ export function canFactCheck(room: Room, sessionId: string): { ok: true } | { ok
   return reason ? { ok: false, reason } : { ok: true };
 }
 
-/** Newest claims first, at most `limit`, for this speaker in the current round only. */
+/** Newest claims first, at most `limit`, for this speaker in this room and round only. */
 export function getRecentClaims(room: Room, speakerSessionId: string, limit = 4): ExtractedClaim[] {
-  const mine = room.game.claims.filter((c) => c.speakerSessionId === speakerSessionId && c.roundSeq === room.game.roundSeq);
+  const mine = room.game.claims.filter((c) => c.roomId === room.id && c.speakerSessionId === speakerSessionId && c.roundSeq === room.game.roundSeq);
   return mine.slice(-limit).reverse();
 }
 
@@ -111,7 +111,7 @@ export function openFactCheck(room: Room, challengerSessionId: string, claimId: 
   const speaker = activeSpeaker(room);
   if (!speaker || speaker.team === null) return { ok: false, reason: 'Nobody is speaking.' };
   const claim = room.game.claims.find((c) => c.id === claimId);
-  if (!claim || claim.roundSeq !== room.game.roundSeq) return { ok: false, reason: 'That claim is not from this round.' };
+  if (!claim || claim.roomId !== room.id || claim.roundSeq !== room.game.roundSeq) return { ok: false, reason: 'That claim is not from this room.' };
   if (claim.speakerSessionId !== speaker.sessionId) return { ok: false, reason: 'That claim is not from the speaker who has the floor.' };
   const challenger = room.participants.get(challengerSessionId);
   if (!challenger || challenger.team === null) return { ok: false, reason: 'Join the room first.' };
@@ -144,6 +144,7 @@ export function openFactCheck(room: Room, challengerSessionId: string, claimId: 
     thread: [],
     thinking: [],
     createdAt: now,
+    scoreDelta: null,
   };
   room.game.factChecks.push(challenge);
   room.game.activeFactCheckId = id;
@@ -181,7 +182,19 @@ export function resolveFactCheck(room: Room, challengeId: string, result: FactCh
   challenge.juryPhase = null;
   challenge.thinking = [];
   challenge.outcome = outcomeForVerdict(result.verdict, !!result.unavailable);
+  const delta = challenge.outcome === 'successful' ? 100 : challenge.outcome === 'failed' ? -50 : 0;
+  challenge.scoreDelta = delta;
+  room.game.scores[challenge.challengerTeam] += delta;
+  room.game.factCheckResumeAt = null;
   return { ok: true, challenge };
+}
+
+/** Verdict is on screen. Clocks stay frozen until this moment, then resume on their own. */
+export const FACT_CHECK_RESUME_MS = 3_500;
+export function beginFactCheckCountdown(room: Room, now: number): void {
+  const challenge = room.game.factChecks.find((f) => f.id === room.game.activeFactCheckId);
+  if (!challenge || challenge.status !== 'resolved') return;
+  room.game.factCheckResumeAt = now + FACT_CHECK_RESUME_MS;
 }
 
 /** Progress only. Does not resolve the check or touch the clocks. */
@@ -221,15 +234,12 @@ export function setConsidering(room: Room, sessionId: string, on: boolean): bool
   return true;
 }
 
-/**
- * Resume after a verdict. Refuses while the referee is still working, so the room can read it.
- * `onlyId` is for the automatic resume: it does nothing if the host already moved on.
- */
-export function dismissFactCheck(room: Room, now: number, onlyId?: string): { ok: true } | { ok: false; message: string } {
+/** Host resumes early. Refuses while the referee is still working, so the room can read the verdict. */
+export function dismissFactCheck(room: Room, now: number): { ok: true } | { ok: false; message: string } {
   if (room.status !== 'live' || !room.game.activeFactCheckId) return { ok: false, message: 'There is no fact check to dismiss.' };
-  if (onlyId && room.game.activeFactCheckId !== onlyId) return { ok: false, message: 'That fact check already cleared.' };
   const challenge = room.game.factChecks.find((f) => f.id === room.game.activeFactCheckId);
   if (challenge?.status === 'checking') return { ok: false, message: 'The fact check is still running.' };
+  room.game.factCheckResumeAt = null;
   room.game.activeFactCheckId = null;
   unfreezeClocks(room, now);
   return { ok: true };

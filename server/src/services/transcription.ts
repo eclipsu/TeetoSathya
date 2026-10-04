@@ -1,11 +1,12 @@
-import { nanoid } from 'nanoid';
-import type { TeamIndex } from '@teeto/shared';
-import { config } from '../config';
-import { appendTranscript, mergeClaims } from '../domain/factcheck';
-import type { Room } from '../domain/model';
-import type { AppSocket, RoomHub } from '../socket/hub';
-import { extractClaims } from './claimExtractor';
-import { ElevenLabsSession } from './elevenlabsStt';
+import { nanoid } from "nanoid";
+import type { TeamIndex } from "@teeto/shared";
+import { config } from "../config";
+import { appendTranscript, mergeClaims } from "../domain/factcheck";
+import { persistRoom } from "../spacetime/archive";
+import type { Room } from "../domain/model";
+import type { AppSocket, RoomHub } from "../socket/hub";
+import { extractClaims } from "./claimExtractor";
+import { ElevenLabsSession } from "./elevenlabsStt";
 
 interface SpeakerTarget {
   roomId: string;
@@ -16,14 +17,27 @@ interface SpeakerTarget {
 }
 
 function targetOf(room: Room): SpeakerTarget | null {
-  if (room.status !== 'live') return null;
+  if (room.status !== "live") return null;
   const g = room.game;
-  if (g.paused || g.buzz || g.activeFactCheckId || g.activeSide === null || g.clockRunningSince === null) return null;
+  if (
+    g.paused ||
+    g.buzz ||
+    g.activeFactCheckId ||
+    g.activeSide === null ||
+    g.clockRunningSince === null
+  )
+    return null;
   const sessionId = g.hotSeat[g.activeSide];
   if (!sessionId) return null;
   const p = room.participants.get(sessionId);
   if (!p || p.team === null) return null;
-  return { roomId: room.id, roundSeq: g.roundSeq, sessionId, publicId: p.id, team: p.team };
+  return {
+    roomId: room.id,
+    roundSeq: g.roundSeq,
+    sessionId,
+    publicId: p.id,
+    team: p.team,
+  };
 }
 
 function targetKey(t: SpeakerTarget): string {
@@ -32,7 +46,8 @@ function targetKey(t: SpeakerTarget): string {
 
 function asPcm(payload: unknown): Buffer | null {
   if (Buffer.isBuffer(payload)) return payload;
-  if (payload instanceof Uint8Array) return Buffer.from(payload.buffer, payload.byteOffset, payload.byteLength);
+  if (payload instanceof Uint8Array)
+    return Buffer.from(payload.buffer, payload.byteOffset, payload.byteLength);
   if (payload instanceof ArrayBuffer) return Buffer.from(payload);
   return null;
 }
@@ -44,7 +59,10 @@ function asPcm(payload: unknown): Buffer | null {
  */
 export class Transcription {
   private desired = new Map<string, SpeakerTarget | null>();
-  private sessions = new Map<string, { target: SpeakerTarget; stt: ElevenLabsSession; retiring: boolean }>();
+  private sessions = new Map<
+    string,
+    { target: SpeakerTarget; stt: ElevenLabsSession; retiring: boolean }
+  >();
   private pending = new Map<string, string>();
   private partials = new Map<string, string>();
   private partialTimers = new Map<string, NodeJS.Timeout>();
@@ -65,11 +83,19 @@ export class Transcription {
     const next = targetOf(room);
     this.desired.set(room.id, next);
     const cur = this.sessions.get(room.id);
-    const same = !!cur && !!next && cur.target.sessionId === next.sessionId && cur.target.roundSeq === next.roundSeq && !cur.retiring;
+    const same =
+      !!cur &&
+      !!next &&
+      cur.target.sessionId === next.sessionId &&
+      cur.target.roundSeq === next.roundSeq &&
+      !cur.retiring;
     if (same) return;
     if (cur) void this.retire(room.id, cur);
     if (next) this.open(next);
-    else this.hub.io.to(room.id).emit('transcript:interim', { speakerId: '', text: '' });
+    else
+      this.hub.io
+        .to(room.id)
+        .emit("transcript:interim", { speakerId: "", text: "" });
   }
 
   drop(roomId: string): void {
@@ -78,27 +104,38 @@ export class Transcription {
     this.sessions.delete(roomId);
     cur?.stt.close();
     this.clearRetry(roomId);
-    for (const key of this.pending.keys()) if (key.startsWith(roomId + ':')) this.pending.delete(key);
+    this.forgetRoom(roomId);
   }
 
   /**
    * Audio from the browser that is publishing the LiveKit mic track.
    * Dropped unless that socket is the current hot-seat speaker.
    */
-  acceptAudio(sessionId: string, roomId: string | undefined, payload: unknown): void {
+  acceptAudio(
+    sessionId: string,
+    roomId: string | undefined,
+    payload: unknown,
+  ): void {
     if (!roomId) return;
     const pcm = asPcm(payload);
     if (!pcm || pcm.length < 2 || pcm.length > 64_000) {
-      if (!this.audioLogged.has(roomId + ':bad')) {
-        this.audioLogged.add(roomId + ':bad');
-        const kind = payload === null || payload === undefined ? 'empty' : (payload as { constructor?: { name?: string } }).constructor?.name ?? typeof payload;
+      if (!this.audioLogged.has(roomId + ":bad")) {
+        this.audioLogged.add(roomId + ":bad");
+        const kind =
+          payload === null || payload === undefined
+            ? "empty"
+            : ((payload as { constructor?: { name?: string } }).constructor
+                ?.name ?? typeof payload);
         console.warn(`[stt] ${roomId}: microphone packet ignored (${kind})`);
       }
       return;
     }
     const now = Date.now();
     const window = this.audioWindow.get(roomId) ?? { t: now, n: 0 };
-    if (now - window.t > 1000) { window.t = now; window.n = 0; }
+    if (now - window.t > 1000) {
+      window.t = now;
+      window.n = 0;
+    }
     window.n += 1;
     this.audioWindow.set(roomId, window);
     if (window.n > 30) return;
@@ -106,7 +143,9 @@ export class Transcription {
     if (!cur || cur.retiring || cur.target.sessionId !== sessionId) return;
     if (!this.audioLogged.has(roomId)) {
       this.audioLogged.add(roomId);
-      console.log(`[stt] ${roomId}: microphone audio is reaching transcription`);
+      console.log(
+        `[stt] ${roomId}: microphone audio is reaching transcription`,
+      );
     }
     cur.stt.sendPcm(pcm);
   }
@@ -114,7 +153,11 @@ export class Transcription {
   /** Commit in-flight speech and run claim extraction before the claim picker answers. */
   async flushCurrent(room: Room): Promise<void> {
     const cur = this.sessions.get(room.id);
-    const target = (cur && !cur.retiring ? cur.target : null) ?? targetOf(room) ?? cur?.target ?? null;
+    const target =
+      (cur && !cur.retiring ? cur.target : null) ??
+      targetOf(room) ??
+      cur?.target ??
+      null;
     if (!target) return;
     if (cur && !cur.retiring && cur.target.sessionId === target.sessionId) {
       await this.retire(room.id, cur);
@@ -128,12 +171,16 @@ export class Transcription {
 
   private open(target: SpeakerTarget): void {
     if (!config.elevenLabsApiKey || this.fatal.has(target.roomId)) {
-      this.hub.io.to(target.roomId).emit('transcript:status', { available: false });
+      this.hub.io
+        .to(target.roomId)
+        .emit("transcript:status", { available: false });
       return;
     }
     const stt = new ElevenLabsSession({
       onPartial: (text) => {
-        this.hub.io.to(target.roomId).emit('transcript:interim', { speakerId: target.publicId, text });
+        this.hub.io
+          .to(target.roomId)
+          .emit("transcript:interim", { speakerId: target.publicId, text });
         const key = targetKey(target);
         this.partials.set(key, text);
         this.armPartial(key, target);
@@ -141,19 +188,28 @@ export class Transcription {
       onCommitted: (text) => this.onCommitted(target, text),
       onOpen: () => {
         this.retryCount.set(target.roomId, 0);
-        this.hub.io.to(target.roomId).emit('transcript:status', { available: true });
+        this.hub.io
+          .to(target.roomId)
+          .emit("transcript:status", { available: true });
       },
       onDown: (message, fatal) => {
         console.warn(`[stt] ${target.roomId}: ${message}`);
-        if (message.startsWith('input_error')) return;
+        if (message.startsWith("input_error")) return;
         this.takePartial(target);
-        this.hub.io.to(target.roomId).emit('transcript:status', { available: false });
+        this.hub.io
+          .to(target.roomId)
+          .emit("transcript:status", { available: false });
         if (fatal) {
           this.fatal.add(target.roomId);
           return;
         }
         const cur = this.sessions.get(target.roomId);
-        if (cur && !cur.retiring && cur.target.sessionId === target.sessionId && cur.target.roundSeq === target.roundSeq) {
+        if (
+          cur &&
+          !cur.retiring &&
+          cur.target.sessionId === target.sessionId &&
+          cur.target.roundSeq === target.roundSeq
+        ) {
           this.scheduleRetry(target);
         }
       },
@@ -163,13 +219,20 @@ export class Transcription {
     stt.start();
   }
 
-  private async retire(roomId: string, cur: { target: SpeakerTarget; stt: ElevenLabsSession; retiring: boolean }): Promise<void> {
+  private async retire(
+    roomId: string,
+    cur: { target: SpeakerTarget; stt: ElevenLabsSession; retiring: boolean },
+  ): Promise<void> {
     if (cur.retiring) return;
     cur.retiring = true;
     if (this.sessions.get(roomId) === cur) this.sessions.delete(roomId);
     const key = targetKey(cur.target);
     this.takePartial(cur.target);
-    try { await cur.stt.commitAndWait(1500); } catch (err) { console.warn('[stt] commit failed:', (err as Error).message); }
+    try {
+      await cur.stt.commitAndWait(1500);
+    } catch (err) {
+      console.warn("[stt] commit failed:", (err as Error).message);
+    }
     cur.stt.close();
     await this.drain(key);
   }
@@ -178,10 +241,13 @@ export class Transcription {
   private armPartial(key: string, target: SpeakerTarget): void {
     const existing = this.partialTimers.get(key);
     if (existing) clearTimeout(existing);
-    this.partialTimers.set(key, setTimeout(() => {
-      this.partialTimers.delete(key);
-      this.takePartial(target);
-    }, 1200));
+    this.partialTimers.set(
+      key,
+      setTimeout(() => {
+        this.partialTimers.delete(key);
+        this.takePartial(target);
+      }, 1200),
+    );
   }
 
   private takePartial(target: SpeakerTarget): void {
@@ -189,7 +255,7 @@ export class Transcription {
     const timer = this.partialTimers.get(key);
     if (timer) clearTimeout(timer);
     this.partialTimers.delete(key);
-    const text = (this.partials.get(key) ?? '').trim();
+    const text = (this.partials.get(key) ?? "").trim();
     this.partials.delete(key);
     if (text) this.onCommitted(target, text);
   }
@@ -200,20 +266,24 @@ export class Transcription {
     if (timer) clearTimeout(timer);
     this.partialTimers.delete(key);
     this.partials.delete(key);
-    const prev = this.uttered.get(key) ?? '';
+    const prev = this.uttered.get(key) ?? "";
     let addition = text.trim();
     if (!addition) return;
     if (prev && (addition === prev || prev.endsWith(addition))) return;
-    if (prev && addition.startsWith(prev)) addition = addition.slice(prev.length).trim();
+    if (prev && addition.startsWith(prev))
+      addition = addition.slice(prev.length).trim();
     if (!addition) {
       this.uttered.set(key, text.trim());
       return;
     }
-    this.uttered.set(key, prev ? `${prev} ${addition}`.trim().slice(-4000) : addition);
+    this.uttered.set(
+      key,
+      prev ? `${prev} ${addition}`.trim().slice(-4000) : addition,
+    );
     text = addition;
     this.meta.set(key, target);
     void this.hub.store.update(target.roomId, (room) => {
-      appendTranscript(room, {
+      const saved = appendTranscript(room, {
         id: nanoid(10),
         roomId: target.roomId,
         speakerSessionId: target.sessionId,
@@ -222,11 +292,16 @@ export class Transcription {
         at: Date.now(),
         roundSeq: target.roundSeq,
       });
+      if (saved) persistRoom(room);
       return null;
     });
-    const combined = `${this.pending.get(key) ?? ''} ${text}`.trim().slice(-4000);
+    const combined = `${this.pending.get(key) ?? ""} ${text}`
+      .trim()
+      .slice(-4000);
     this.pending.set(key, combined);
-    this.hub.io.to(target.roomId).emit('transcript:interim', { speakerId: target.publicId, text: '' });
+    this.hub.io
+      .to(target.roomId)
+      .emit("transcript:interim", { speakerId: target.publicId, text: "" });
     if (combined.length >= 240) {
       this.clearTimer(key);
       void this.enqueue(key, () => this.extractPending(key));
@@ -235,10 +310,13 @@ export class Transcription {
 
   private schedule(key: string): void {
     this.clearTimer(key);
-    this.timers.set(key, setTimeout(() => {
-      this.timers.delete(key);
-      void this.enqueue(key, () => this.extractPending(key));
-    }, 700));
+    this.timers.set(
+      key,
+      setTimeout(() => {
+        this.timers.delete(key);
+        void this.enqueue(key, () => this.extractPending(key));
+      }, 700),
+    );
   }
 
   private async drain(key: string): Promise<void> {
@@ -250,38 +328,56 @@ export class Transcription {
   private enqueue(key: string, job: () => Promise<void>): Promise<void> {
     const prev = this.chains.get(key) ?? Promise.resolve();
     const next = prev.then(job, job);
-    this.chains.set(key, next.then(() => undefined, () => undefined));
+    this.chains.set(
+      key,
+      next.then(
+        () => undefined,
+        () => undefined,
+      ),
+    );
     return next;
   }
 
   private async extractPending(key: string, force = false): Promise<void> {
-    const text = (this.pending.get(key) ?? '').trim();
+    const text = (this.pending.get(key) ?? "").trim();
     if (!text || (!force && text.length < 8)) return;
-    this.pending.set(key, '');
+    this.pending.set(key, "");
     const meta = this.meta.get(key);
     if (!meta) return;
     let drafts;
     try {
       drafts = await extractClaims(text, AbortSignal.timeout(22_000));
     } catch (err) {
-      console.warn('[claims] extraction failed:', (err as Error).message);
-      const newer = this.pending.get(key) ?? '';
+      console.warn("[claims] extraction failed:", (err as Error).message);
+      const newer = this.pending.get(key) ?? "";
       this.pending.set(key, `${text} ${newer}`.trim().slice(-4000));
       return;
     }
     if (!drafts.length) return;
     const now = Date.now();
     await this.hub.store.update(meta.roomId, (room) => {
-      if (room.status !== 'live' || room.game.roundSeq !== meta.roundSeq) return null;
-      const added = mergeClaims(room, drafts.map((d) => ({
-        id: nanoid(10),
-        text: d.text,
-        originalText: d.originalText,
-        speakerSessionId: meta.sessionId,
-        team: meta.team,
-        createdAt: now,
-      })));
-      if (added.length) console.log(`[claims] ${meta.publicId} +${added.length}`);
+      if (
+        room.id !== meta.roomId ||
+        room.status !== "live" ||
+        room.game.roundSeq !== meta.roundSeq
+      )
+        return null;
+      if (!room.participants.has(meta.sessionId)) return null;
+      const added = mergeClaims(
+        room,
+        drafts.map((d) => ({
+          id: nanoid(10),
+          text: d.text,
+          originalText: d.originalText,
+          speakerSessionId: meta.sessionId,
+          team: meta.team,
+          createdAt: now,
+        })),
+      );
+      if (added.length) {
+        console.log(`[claims] ${meta.publicId} +${added.length}`);
+        persistRoom(room);
+      }
       return null;
     });
   }
@@ -291,16 +387,43 @@ export class Transcription {
     const n = (this.retryCount.get(target.roomId) ?? 0) + 1;
     this.retryCount.set(target.roomId, n);
     const delay = Math.min(8000, 1000 * 2 ** Math.min(n, 3));
-    this.retry.set(target.roomId, setTimeout(() => {
-      this.retry.delete(target.roomId);
-      const want = this.desired.get(target.roomId);
-      if (!want || want.sessionId !== target.sessionId || want.roundSeq !== target.roundSeq) return;
-      if (this.fatal.has(target.roomId)) return;
-      const cur = this.sessions.get(target.roomId);
-      cur?.stt.close();
-      this.sessions.delete(target.roomId);
-      this.open(want);
-    }, delay));
+    this.retry.set(
+      target.roomId,
+      setTimeout(() => {
+        this.retry.delete(target.roomId);
+        const want = this.desired.get(target.roomId);
+        if (
+          !want ||
+          want.sessionId !== target.sessionId ||
+          want.roundSeq !== target.roundSeq
+        )
+          return;
+        if (this.fatal.has(target.roomId)) return;
+        const cur = this.sessions.get(target.roomId);
+        cur?.stt.close();
+        this.sessions.delete(target.roomId);
+        this.open(want);
+      }, delay),
+    );
+  }
+
+  /** Drop speech that belongs to this room so it cannot be extracted into another. */
+  private forgetRoom(roomId: string): void {
+    const prefix = roomId + ":";
+    for (const bucket of [this.pending, this.partials, this.uttered, this.meta]) {
+      for (const key of bucket.keys()) if (key.startsWith(prefix)) bucket.delete(key);
+    }
+    for (const key of this.partialTimers.keys()) {
+      if (!key.startsWith(prefix)) continue;
+      const timer = this.partialTimers.get(key);
+      if (timer) clearTimeout(timer);
+      this.partialTimers.delete(key);
+    }
+    for (const key of this.timers.keys()) {
+      if (!key.startsWith(prefix)) continue;
+      this.clearTimer(key);
+    }
+    for (const key of this.chains.keys()) if (key.startsWith(prefix)) this.chains.delete(key);
   }
 
   private clearTimer(key: string): void {
@@ -320,9 +443,9 @@ export function installTranscription(hub: RoomHub): Transcription {
   const transcription = new Transcription(hub);
   hub.onRoomChange((room) => transcription.sync(room));
   hub.onRoomClosed((roomId) => transcription.drop(roomId));
-  hub.io.on('connection', (socket) => {
+  hub.io.on("connection", (socket) => {
     const s = socket as AppSocket;
-    s.on('transcript:audio', (payload: unknown) => {
+    s.on("transcript:audio", (payload: unknown) => {
       transcription.acceptAudio(s.data.sessionId, s.data.roomId, payload);
     });
   });

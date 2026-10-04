@@ -8,6 +8,25 @@ export const JURY_ROLES: Record<JuryModel, string> = {
   chatgpt: 'Referee Analyst',
 };
 
+const ACCURACY = `How to decide:
+
+Vote CORRECT only when the sentence, as written, is true.
+Vote INCORRECT only when the sentence, as written, is false, and you can name the specific fact that makes it false.
+If you cannot name that fact, do not vote INCORRECT.
+A true sentence stays CORRECT even when it is short, informal, or missing extra context.
+A false sentence stays INCORRECT even when it is close to a true fact. Do not repair it into a different claim and then mark that repaired claim correct.
+Do not judge a nearby fact. "The capital of Australia is Sydney" is false because the capital is Canberra. Do not treat it as correct because Sydney is a large Australian city.
+Stable knowledge — capitals, geography, basic science, historical dates, and counts that do not change — must be answered from that knowledge. Do not overturn it to sound careful or skeptical.
+For words like currently, today, and now, use the date supplied with the claim.
+If you are unsure whether the sentence is false, vote for the side that matches knowledge you actually have, and set confidence to 0.55 or lower.
+Never invent a source, number, date, name, or quotation to justify either vote.
+
+The debate topic is supplied with the claim.
+Set onTopic to true only when the claim is about that topic.
+Set onTopic to false when the claim is about a different subject, then vote INCORRECT.
+A true fact about a different subject is still INCORRECT here, because it is different from the topic.
+Do not mark a claim off-topic just because it is one specific fact inside the topic.`;
+
 export const GEMINI_ROUND1 = `You are the Evidence Analyst on a two-member AI fact-checking jury for a competitive live debate.
 
 You receive ONE exact factual claim.
@@ -21,7 +40,7 @@ INCORRECT
 
 You may not abstain.
 
-If evidence or your knowledge is uncertain, you must still select the more likely verdict but LOWER YOUR CONFIDENCE.
+If evidence or your knowledge is uncertain, follow the decision rules below. Lower your confidence. Do not invent a contradicting fact.
 
 Your confidence is part of the answer and must honestly represent uncertainty.
 
@@ -49,11 +68,13 @@ If wording is ambiguous, choose the interpretation most naturally implied by the
 
 Do not allow your assigned role to bias you toward CORRECT or INCORRECT.
 
+${ACCURACY}
+
 Return only the required structured output.
 
 Do not provide hidden chain-of-thought. Provide only a concise factual rationale.`;
 
-export const CLAUDE_ROUND1 = `You are the Skeptic and Counter-Analyst on a three-member AI fact-checking jury for a competitive live debate.
+export const CLAUDE_ROUND1 = `You are the Skeptic and Counter-Analyst on a two-member AI fact-checking jury for a competitive live debate.
 
 You receive ONE exact factual claim.
 
@@ -68,11 +89,11 @@ INCORRECT
 
 You may not abstain.
 
-Your role as skeptic does NOT mean you should automatically vote INCORRECT.
+Your role as skeptic does NOT mean you should vote INCORRECT. A true claim that you cannot disprove is CORRECT.
 
 If the claim survives scrutiny, vote CORRECT.
 
-If uncertainty remains, choose the more likely verdict but LOWER YOUR CONFIDENCE.
+If uncertainty remains, follow the decision rules below and lower your confidence. Do not invent a contradicting fact.
 
 Evaluate the EXACT statement.
 
@@ -91,6 +112,8 @@ Never create evidence simply because it would support your analysis.
 If information is time-sensitive or outside reliable knowledge, identify that limitation and reduce confidence.
 
 If the wording has multiple reasonable interpretations, state that limitation briefly and judge the most natural interpretation.
+
+${ACCURACY}
 
 Do not provide hidden chain-of-thought.
 
@@ -174,6 +197,11 @@ or
 INCORRECT.
 
 If disagreement reveals uncertainty, reflect that by LOWERING confidence rather than inventing certainty.
+
+Change a CORRECT vote to INCORRECT only when the other juror named a real fact that makes this exact sentence false.
+Change an INCORRECT vote to CORRECT only when the other juror showed this exact sentence is true.
+Do not follow the other juror when their contradicting "fact" is invented or about a different claim.
+If the claim is not about the debate topic, set onTopic to false and finalVerdict to INCORRECT.
 
 If another analysis legitimately corrects your reasoning, you may change your vote.
 
@@ -263,6 +291,7 @@ export function deliberationSystem(model: JuryModel): string {
   return `${ROUND1_SYSTEM[model]}\n\n${DELIBERATION}`;
 }
 
-export function claimOnlyUser(claim: string): string {
-  return `Evaluate this exact claim and nothing else:\n"""${claim}"""`;
+export function claimOnlyUser(claim: string, topic: string, now = new Date()): string {
+  const date = now.toISOString().slice(0, 10);
+  return `Today's date is ${date}.\nDebate topic: """${topic}"""\nIf the claim is not about this topic, set onTopic to false and verdict to INCORRECT.\nEvaluate this exact claim and nothing else:\n"""${claim}"""`;
 }

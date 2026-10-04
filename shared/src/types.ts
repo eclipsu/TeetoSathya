@@ -90,6 +90,8 @@ export interface JuryVote {
   initialVerdict: JuryBinary;
   initialConfidence: number;
   finalVerdict: JuryBinary;
+  /** False when this juror found the claim off the room topic. */
+  onTopic: boolean;
   finalConfidence: number;
   changedVote: boolean;
   reasoning: string;
@@ -108,6 +110,8 @@ export interface JuryResult {
   /** Average confidence of the winning side. A 2–1 split multiplies that by 0.90. */
   juryConfidence: number;
   unanimous: boolean;
+  /** True when every seated juror found the claim off the room topic. The verdict is then INCORRECT. */
+  offTopic: boolean;
   votes: JuryVote[];
   completedAt: number;
 }
@@ -155,6 +159,8 @@ export interface FactCheckView {
   /** Jurors still writing their next message. Empty once the check resolves. */
   thinking: JuryModel[];
   createdAt: number;
+  /** Points this check added to the challenger's team. Null while it is still running. */
+  scoreDelta: number | null;
 }
 
 export interface GameView {
@@ -173,14 +179,16 @@ export interface GameView {
   buzz: BuzzView | null;
   /** The fact-check currently holding the floor, if any. Cleared when the host resumes. */
   factCheck: FactCheckView | null;
+  /** Server time when the clocks resume after a finished fact check. Null until the verdict is in. */
+  factCheckResumeAt: number | null;
   /** Resolved and in-progress checks for this round, oldest first. */
   factChecks: FactCheckView[];
   /** Public participant ids that have submitted their one fact-check this round. */
   factCheckUsedIds: string[];
   /** Public participant ids with the claim picker open. The round keeps going. */
   consideringIds: string[];
-  /** Fact-check points per team this round. */
-  score: [number, number];
+  /** Team A, Team B. Authoritative. Reset when a round starts. */
+  scores: [number, number];
   /** Set once the round has ended and a winner is known. Null while live, or on a tie until the host picks. */
   winner: import('./score').RoundWinner | null;
 }

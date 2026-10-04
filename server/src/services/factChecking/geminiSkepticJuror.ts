@@ -24,8 +24,8 @@ async function generate(system: string, user: string, schema: unknown, signal: A
   return text;
 }
 
-export async function geminiSkepticIndependent(claim: string, signal: AbortSignal): Promise<Round1Analysis> {
-  const text = await generate(ROUND1_SYSTEM.gemini_skeptic, claimOnlyUser(claim), ROUND1_JSON_SCHEMA, signal);
+export async function geminiSkepticIndependent(claim: string, topic: string, signal: AbortSignal): Promise<Round1Analysis> {
+  const text = await generate(ROUND1_SYSTEM.gemini_skeptic, claimOnlyUser(claim, topic), ROUND1_JSON_SCHEMA, signal);
   return readRound1('gemini_skeptic', JURY_ROLES.gemini_skeptic, text);
 }
 
