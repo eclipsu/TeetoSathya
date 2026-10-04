@@ -12,6 +12,7 @@ export const config = {
   livekitApiSecret: process.env.LIVEKIT_API_SECRET ?? 'secret',
   lanHost: process.env.LAN_HOST ?? '',
   elevenLabsApiKey: process.env.ELEVENLABS_API_KEY ?? '',
+  elevenLabsVoiceId: process.env.ELEVENLABS_VOICE_ID ?? '',
   geminiApiKey: process.env.GEMINI_API_KEY ?? '',
   geminiFactsKey: process.env.GEMINI_FACTS_KEY ?? '',
   /**

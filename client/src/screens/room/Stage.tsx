@@ -104,7 +104,7 @@ export function Stage({ snapshot: s, myId, isHost, onDone, onStart, interimText,
         {resumeSeconds !== null && (
           <p className="stage__countdown" role="timer" aria-live="polite" aria-label={`Resuming in ${resumeSeconds} seconds`}>
             <span className="stage__countdown-num">{resumeSeconds}</span>
-            <span className="stage__countdown-label">Resuming</span>
+            <span className="stage__countdown-label">Get ready</span>
           </p>
         )}
         {live && transcriptionAvailable === false && <p className="transcript-off">Transcription unavailable</p>}
